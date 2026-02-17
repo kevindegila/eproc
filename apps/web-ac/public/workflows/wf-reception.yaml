@@ -1,0 +1,265 @@
+# ============================================================
+# wf-reception — Receptions provisoires et definitives
+# Decret 2025-169, Art. 111, 135
+# Processus de reception provisoire, periode de garantie,
+# et reception definitive des travaux/fournitures/services
+# ============================================================
+
+nodes:
+  - code: START
+    label: Demande de reception
+    type: START
+    mandatory: true
+
+  - code: DEMANDE_RECEPTION
+    label: Enregistrement de la demande de reception
+    type: ACTION
+    assignee_role: OPERATEUR_ECONOMIQUE
+    sla_hours: 48
+    mandatory: true
+    triggers:
+      notification: PPM
+
+  - code: CONSTITUTION_COMMISSION_RECEPTION
+    label: Constitution de la commission de reception
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 72
+    mandatory: true
+    triggers:
+      notification: MEMBRES_COMMISSION
+    config:
+      quorum_minimum: 3
+
+  - code: VISITE_RECEPTION
+    label: Visite de reception sur site
+    type: ACTION
+    assignee_role: MEMBRE_COMMISSION
+    sla_hours: 120
+    mandatory: true
+    config:
+      description: "Inspection contradictoire des travaux/fournitures (Art. 111)"
+
+  - code: DECISION_RECEPTION_PROVISOIRE
+    label: Decision de reception provisoire
+    type: DECISION
+    assignee_role: MEMBRE_COMMISSION
+    mandatory: true
+    config:
+      question: "Les travaux/fournitures sont-ils conformes au contrat ?"
+      options:
+        - RECEPTION_SANS_RESERVE
+        - RECEPTION_AVEC_RESERVES
+        - REFUS_RECEPTION
+
+  - code: PV_RECEPTION_PROVISOIRE
+    label: Redaction du PV de reception provisoire
+    type: ACTION
+    assignee_role: MEMBRE_COMMISSION
+    sla_hours: 48
+    mandatory: true
+
+  - code: LEVEE_RESERVES
+    label: Levee des reserves
+    type: ACTION
+    assignee_role: OPERATEUR_ECONOMIQUE
+    sla_hours: 720
+    triggers:
+      notification: OPERATEUR_ECONOMIQUE
+    config:
+      description: "Delai accorde au titulaire pour lever les reserves"
+
+  - code: VERIFICATION_LEVEE
+    label: Verification de la levee des reserves
+    type: ACTION
+    assignee_role: MEMBRE_COMMISSION
+    sla_hours: 72
+
+  - code: MISE_EN_DEMEURE
+    label: Mise en demeure (reserves non levees)
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 48
+    triggers:
+      notification: OPERATEUR_ECONOMIQUE
+      cascade_workflow: wf-penalites
+
+  - code: PERIODE_GARANTIE
+    label: Periode de garantie
+    type: SYSTEM
+    mandatory: true
+    config:
+      description: "Periode de garantie commencant a la reception provisoire (Art. 135)"
+      default_duration_months: 12
+
+  - code: DEMANDE_RECEPTION_DEFINITIVE
+    label: Demande de reception definitive
+    type: ACTION
+    assignee_role: OPERATEUR_ECONOMIQUE
+    sla_hours: 48
+    mandatory: true
+    triggers:
+      notification: PPM
+
+  - code: VISITE_RECEPTION_DEFINITIVE
+    label: Visite de reception definitive
+    type: ACTION
+    assignee_role: MEMBRE_COMMISSION
+    sla_hours: 120
+    mandatory: true
+
+  - code: DECISION_RECEPTION_DEFINITIVE
+    label: Decision de reception definitive
+    type: DECISION
+    assignee_role: MEMBRE_COMMISSION
+    mandatory: true
+
+  - code: PV_RECEPTION_DEFINITIVE
+    label: PV de reception definitive
+    type: ACTION
+    assignee_role: MEMBRE_COMMISSION
+    sla_hours: 48
+    mandatory: true
+
+  - code: LIBERATION_GARANTIE
+    label: Liberation de la retenue de garantie
+    type: SYSTEM
+    mandatory: true
+    triggers:
+      cascade_workflow: wf-garantie
+    config:
+      description: "Declenchement de la liberation de la retenue de garantie"
+
+  - code: END_PROVISOIRE
+    label: Reception provisoire prononcee
+    type: END
+    mandatory: true
+
+  - code: END_DEFINITIVE
+    label: Reception definitive prononcee
+    type: END
+    mandatory: true
+
+  - code: END_REFUSE
+    label: Reception refusee
+    type: END
+
+transitions:
+  - from: START
+    to: DEMANDE_RECEPTION
+    action: DEMARRER
+    label: Initier la demande de reception
+
+  - from: DEMANDE_RECEPTION
+    to: CONSTITUTION_COMMISSION_RECEPTION
+    action: ENREGISTRER
+    label: Enregistrer la demande
+    requires_attachment: true
+
+  - from: CONSTITUTION_COMMISSION_RECEPTION
+    to: VISITE_RECEPTION
+    action: CONSTITUER
+    label: Commission constituee
+
+  - from: VISITE_RECEPTION
+    to: DECISION_RECEPTION_PROVISOIRE
+    action: VISITER
+    label: Visite effectuee
+    requires_attachment: true
+
+  - from: DECISION_RECEPTION_PROVISOIRE
+    to: PV_RECEPTION_PROVISOIRE
+    action: ACCEPTER_SANS_RESERVE
+    label: Reception sans reserves
+    requires_signature: true
+
+  - from: DECISION_RECEPTION_PROVISOIRE
+    to: LEVEE_RESERVES
+    action: ACCEPTER_AVEC_RESERVES
+    label: Reception avec reserves
+    requires_comment: true
+    requires_signature: true
+
+  - from: DECISION_RECEPTION_PROVISOIRE
+    to: END_REFUSE
+    action: REFUSER
+    label: Refuser la reception
+    requires_comment: true
+    requires_signature: true
+
+  - from: LEVEE_RESERVES
+    to: VERIFICATION_LEVEE
+    action: LEVER
+    label: Soumettre la levee des reserves
+    requires_attachment: true
+
+  - from: LEVEE_RESERVES
+    to: MISE_EN_DEMEURE
+    action: EXPIRER_DELAI
+    label: Delai de levee expire sans action
+
+  - from: VERIFICATION_LEVEE
+    to: PV_RECEPTION_PROVISOIRE
+    action: VALIDER
+    label: Reserves levees conformement
+    requires_signature: true
+
+  - from: VERIFICATION_LEVEE
+    to: LEVEE_RESERVES
+    action: REJETER
+    label: Levee insuffisante
+    requires_comment: true
+
+  - from: MISE_EN_DEMEURE
+    to: LEVEE_RESERVES
+    action: ACCORDER_DELAI
+    label: Accorder un delai supplementaire
+    requires_comment: true
+
+  - from: PV_RECEPTION_PROVISOIRE
+    to: PERIODE_GARANTIE
+    action: PRONONCER
+    label: Prononcer la reception provisoire
+    requires_attachment: true
+    requires_signature: true
+
+  - from: PERIODE_GARANTIE
+    to: DEMANDE_RECEPTION_DEFINITIVE
+    action: EXPIRER
+    label: Fin de la periode de garantie
+
+  - from: DEMANDE_RECEPTION_DEFINITIVE
+    to: VISITE_RECEPTION_DEFINITIVE
+    action: DEMANDER
+    label: Demander la reception definitive
+
+  - from: VISITE_RECEPTION_DEFINITIVE
+    to: DECISION_RECEPTION_DEFINITIVE
+    action: VISITER
+    label: Visite definitive effectuee
+    requires_attachment: true
+
+  - from: DECISION_RECEPTION_DEFINITIVE
+    to: PV_RECEPTION_DEFINITIVE
+    action: ACCEPTER
+    label: Prononcer la reception definitive
+    requires_signature: true
+
+  - from: DECISION_RECEPTION_DEFINITIVE
+    to: END_REFUSE
+    action: REFUSER
+    label: Refuser la reception definitive
+    requires_comment: true
+    requires_signature: true
+
+  - from: PV_RECEPTION_DEFINITIVE
+    to: LIBERATION_GARANTIE
+    action: PRONONCER
+    label: Reception definitive prononcee
+    requires_attachment: true
+    requires_signature: true
+
+  - from: LIBERATION_GARANTIE
+    to: END_DEFINITIVE
+    action: LIBERER
+    label: Garantie liberee, marche cloture

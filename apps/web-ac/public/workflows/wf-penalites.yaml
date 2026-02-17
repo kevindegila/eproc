@@ -1,0 +1,200 @@
+# ============================================================
+# wf-penalites — Penalites de retard
+# Decret 2025-169, Art. 120
+# Calcul, notification et application des penalites
+# de retard dans l'execution du marche
+# ============================================================
+
+nodes:
+  - code: START
+    label: Constatation du retard
+    type: START
+    mandatory: true
+
+  - code: CONSTATATION_RETARD
+    label: Constatation officielle du retard
+    type: ACTION
+    assignee_role: AGENT_PPM
+    sla_hours: 48
+    mandatory: true
+    triggers:
+      notification: ASSIGNEE
+    config:
+      description: "Constatation du depassement du delai contractuel (Art. 120)"
+
+  - code: CALCUL_PENALITES
+    label: Calcul des penalites
+    type: SYSTEM
+    mandatory: true
+    config:
+      description: "Calcul automatique selon les taux prevus au contrat"
+      formule: "montant_journalier * nombre_jours_retard"
+      plafond_pourcentage: 10
+
+  - code: VERIFICATION_PLAFOND
+    label: Verification du plafond de penalites
+    type: DECISION
+    mandatory: true
+    config:
+      question: "Les penalites depassent-elles le plafond contractuel ?"
+
+  - code: NOTIFICATION_TITULAIRE
+    label: Notification au titulaire
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 48
+    mandatory: true
+    triggers:
+      notification: OPERATEUR_ECONOMIQUE
+    config:
+      description: "Mise en demeure prealable a l'application des penalites"
+
+  - code: DELAI_REPONSE
+    label: Delai de reponse du titulaire
+    type: ACTION
+    assignee_role: OPERATEUR_ECONOMIQUE
+    sla_hours: 240
+    config:
+      description: "Le titulaire dispose de 10 jours pour presenter ses observations"
+
+  - code: DECISION_CONTESTATION
+    label: Examen des observations
+    type: DECISION
+    assignee_role: PPM
+    mandatory: true
+
+  - code: EXONERATION
+    label: Exoneration des penalites
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 48
+    config:
+      description: "Exoneration totale ou partielle pour force majeure (Art. 120 al. 3)"
+
+  - code: APPLICATION_PENALITES
+    label: Application des penalites
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 24
+    mandatory: true
+    config:
+      description: "Deduction sur le prochain paiement ou appel de garantie"
+
+  - code: DECISION_RESILIATION
+    label: Faut-il resilier le contrat ?
+    type: DECISION
+    assignee_role: PPM
+    config:
+      question: "Le plafond de penalites est-il atteint ?"
+
+  - code: DEDUCTION_PAIEMENT
+    label: Deduction sur paiement
+    type: SYSTEM
+    mandatory: true
+    config:
+      description: "Imputation automatique sur le prochain decompte"
+
+  - code: END
+    label: Penalites appliquees
+    type: END
+    mandatory: true
+
+  - code: END_EXONERE
+    label: Penalites exonerees
+    type: END
+
+  - code: END_RESILIATION
+    label: Resiliation envisagee
+    type: END
+
+transitions:
+  - from: START
+    to: CONSTATATION_RETARD
+    action: DEMARRER
+    label: Constater le retard
+
+  - from: CONSTATATION_RETARD
+    to: CALCUL_PENALITES
+    action: CONSTATER
+    label: Retard constate officiellement
+    requires_attachment: true
+
+  - from: CALCUL_PENALITES
+    to: VERIFICATION_PLAFOND
+    action: CALCULER
+    label: Penalites calculees
+
+  - from: VERIFICATION_PLAFOND
+    to: NOTIFICATION_TITULAIRE
+    action: DANS_LIMITES
+    label: Penalites dans les limites contractuelles
+    guard:
+      field: plafond_atteint
+      operator: eq
+      value: false
+
+  - from: VERIFICATION_PLAFOND
+    to: DECISION_RESILIATION
+    action: PLAFOND_ATTEINT
+    label: Plafond de penalites atteint
+    guard:
+      field: plafond_atteint
+      operator: eq
+      value: true
+
+  - from: DECISION_RESILIATION
+    to: NOTIFICATION_TITULAIRE
+    action: CONTINUER
+    label: Poursuivre le marche malgre le plafond
+
+  - from: DECISION_RESILIATION
+    to: END_RESILIATION
+    action: RESILIER
+    label: Envisager la resiliation
+    requires_comment: true
+    requires_signature: true
+
+  - from: NOTIFICATION_TITULAIRE
+    to: DELAI_REPONSE
+    action: NOTIFIER
+    label: Notifier le titulaire
+
+  - from: DELAI_REPONSE
+    to: DECISION_CONTESTATION
+    action: REPONDRE
+    label: Observations du titulaire recues
+    requires_comment: true
+
+  - from: DELAI_REPONSE
+    to: DECISION_CONTESTATION
+    action: EXPIRER
+    label: Delai expire sans reponse
+
+  - from: DECISION_CONTESTATION
+    to: APPLICATION_PENALITES
+    action: MAINTENIR
+    label: Maintenir les penalites
+
+  - from: DECISION_CONTESTATION
+    to: EXONERATION
+    action: EXONERER
+    label: Exonerer (force majeure)
+    requires_comment: true
+    requires_signature: true
+
+  - from: EXONERATION
+    to: END_EXONERE
+    action: CONFIRMER
+    label: Exoneration confirmee
+    requires_signature: true
+
+  - from: APPLICATION_PENALITES
+    to: DEDUCTION_PAIEMENT
+    action: APPLIQUER
+    label: Appliquer les penalites
+    requires_signature: true
+
+  - from: DEDUCTION_PAIEMENT
+    to: END
+    action: DEDUIRE
+    label: Penalites deduites

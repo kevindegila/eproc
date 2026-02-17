@@ -1,0 +1,61 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+generated/
+*.tsbuildinfo
+
+# Turborepo
+.turbo/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Testing
+coverage/
+
+# Vite
+.vite/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Claude Code
+.claude/
+
+# Uploads (user-generated files)
+uploads/
+**/uploads/
+
+# Database files
+prisma/*.db
+*.db
+*.db-journal
+
+# Docker volumes
+infrastructure/docker/data/
+
+# Reference documents (large files / sensitive)
+DAO/
+PPM/
+TDR/
+
+# Lock files are committed, but ignore local store
+.pnpm-store/

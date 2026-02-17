@@ -1,0 +1,81 @@
+generator client {
+  provider        = "prisma-client-js"
+  output          = "../generated/prisma"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["passation"]
+}
+
+model DAC {
+  id               String   @id @default(uuid())
+  reference        String   @unique
+  title            String
+  description      String   @default("")
+  organizationId   String   @map("organization_id")
+  marketType       String   @map("market_type")
+  procurementMethod String  @map("procurement_method")
+  estimatedAmount  Float    @map("estimated_amount")
+  fundingSource    String?  @map("funding_source")
+  ppmReference     String?  @map("ppm_reference")
+  executionDelay   Int?     @map("execution_delay")
+  status           String   @default("BROUILLON")
+  publicationDate  DateTime? @map("publication_date")
+  closingDate      DateTime? @map("closing_date")
+  criteria         Json?
+  documents        DACDocument[]
+  withdrawals      DACWithdrawal[]
+  createdBy        String   @map("created_by")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@map("dacs")
+  @@schema("passation")
+}
+
+model DACDocument {
+  id          String   @id @default(uuid())
+  dacId       String   @map("dac_id")
+  dac         DAC      @relation(fields: [dacId], references: [id], onDelete: Cascade)
+  name        String
+  filePath    String   @map("file_path")
+  fileSize    Int      @map("file_size")
+  mimeType    String   @map("mime_type")
+  category    String?
+  uploadedBy  String   @map("uploaded_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("dac_documents")
+  @@schema("passation")
+}
+
+model DACTemplate {
+  id          String   @id @default(uuid())
+  name        String
+  marketType  String   @map("market_type")
+  filePath    String   @map("file_path")
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("dac_templates")
+  @@schema("passation")
+}
+
+model DACWithdrawal {
+  id              String   @id @default(uuid())
+  dacId           String   @map("dac_id")
+  dac             DAC      @relation(fields: [dacId], references: [id], onDelete: Cascade)
+  operatorName    String   @map("operator_name")
+  operatorEmail   String   @map("operator_email")
+  operatorPhone   String?  @map("operator_phone")
+  withdrawalDate  DateTime @default(now()) @map("withdrawal_date")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@map("dac_withdrawals")
+  @@schema("passation")
+}

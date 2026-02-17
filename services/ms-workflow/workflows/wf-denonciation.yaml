@@ -1,0 +1,291 @@
+# ============================================================
+# wf-denonciation — Denonciation
+# Decret 2025-169, Art. 170-174
+# Traitement des denonciations de pratiques irregulieres
+# dans la commande publique
+# ============================================================
+
+nodes:
+  - code: START
+    label: Reception de la denonciation
+    type: START
+    mandatory: true
+
+  - code: DEPOT_DENONCIATION
+    label: Depot de la denonciation
+    type: ACTION
+    assignee_role: PUBLIC
+    mandatory: true
+    triggers:
+      notification: ARMP
+    config:
+      description: "Denonciation de pratiques irregulieres (Art. 170)"
+      anonyme_possible: true
+      canaux:
+        - PORTAIL_NATIONAL
+        - COURRIER
+        - EMAIL
+
+  - code: ENREGISTREMENT
+    label: Enregistrement confidentiel
+    type: SYSTEM
+    mandatory: true
+    config:
+      auto_number: true
+      confidential: true
+
+  - code: EXAMEN_PRELIMINAIRE
+    label: Examen preliminaire
+    type: ACTION
+    assignee_role: AGENT_ARMP
+    sla_hours: 120
+    mandatory: true
+    config:
+      description: "Examen de la nature et de la gravite des faits denonces (Art. 171)"
+      criteria:
+        - faits_precis
+        - elements_probants
+        - gravite_allegations
+
+  - code: DECISION_SUITE
+    label: Decision de suite a donner
+    type: DECISION
+    assignee_role: ARMP
+    mandatory: true
+    config:
+      options:
+        - ENQUETE_APPROFONDIE
+        - TRANSMISSION_AUTORITE
+        - CLASSEMENT
+
+  - code: ENQUETE
+    label: Enquete approfondie
+    type: ACTION
+    assignee_role: AGENT_ARMP
+    sla_hours: 720
+    triggers:
+      notification: ASSIGNEE
+    config:
+      description: "Investigation sur les faits denonces (Art. 172)"
+      pouvoirs:
+        - demande_documents
+        - audition_personnes
+        - visite_sites
+
+  - code: AUDITION
+    label: Audition des personnes concernees
+    type: ACTION
+    assignee_role: AGENT_ARMP
+    sla_hours: 240
+    config:
+      description: "Audition contradictoire"
+
+  - code: REDACTION_RAPPORT
+    label: Redaction du rapport d'enquete
+    type: ACTION
+    assignee_role: AGENT_ARMP
+    sla_hours: 120
+    mandatory: true
+
+  - code: DELIBERATION_ARMP
+    label: Deliberation de l'ARMP
+    type: ACTION
+    assignee_role: ARMP
+    sla_hours: 120
+    mandatory: true
+
+  - code: DECISION_ARMP
+    label: Decision de l'ARMP
+    type: DECISION
+    assignee_role: ARMP
+    mandatory: true
+    config:
+      options:
+        - SANCTIONS_ADMINISTRATIVES
+        - TRANSMISSION_JUSTICE
+        - MESURES_CORRECTIVES
+        - CLASSEMENT_DEFINITIF
+
+  - code: NOTIFICATION_DECISION
+    label: Notification de la decision
+    type: SYSTEM
+    mandatory: true
+    triggers:
+      notification: ALL
+
+  - code: TRANSMISSION_JUSTICE
+    label: Transmission au procureur
+    type: SYSTEM
+    config:
+      description: "Transmission du dossier au procureur pour faits penaux (Art. 173)"
+
+  - code: SANCTIONS
+    label: Application des sanctions administratives
+    type: ACTION
+    assignee_role: ARMP
+    sla_hours: 48
+    config:
+      types_sanctions:
+        - EXCLUSION_TEMPORAIRE
+        - EXCLUSION_DEFINITIVE
+        - AMENDE
+
+  - code: MESURES_CORRECTIVES
+    label: Mise en oeuvre de mesures correctives
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 240
+    triggers:
+      notification: PPM
+
+  - code: SUIVI_EXECUTION
+    label: Suivi de l'execution des mesures
+    type: ACTION
+    assignee_role: AGENT_ARMP
+    sla_hours: 720
+
+  - code: PROTECTION_DENONCIATEUR
+    label: Mesures de protection du denonciateur
+    type: SYSTEM
+    config:
+      description: "Protection de l'identite et contre les represailles (Art. 174)"
+
+  - code: END_SANCTIONS
+    label: Sanctions appliquees
+    type: END
+    mandatory: true
+
+  - code: END_CLASSE
+    label: Denonciation classee
+    type: END
+
+  - code: END_JUSTICE
+    label: Transmis a la justice
+    type: END
+
+transitions:
+  - from: START
+    to: DEPOT_DENONCIATION
+    action: DEMARRER
+    label: Recevoir la denonciation
+
+  - from: DEPOT_DENONCIATION
+    to: ENREGISTREMENT
+    action: DEPOSER
+    label: Deposer la denonciation
+    requires_comment: true
+
+  - from: ENREGISTREMENT
+    to: PROTECTION_DENONCIATEUR
+    action: ENREGISTRER
+    label: Denonciation enregistree
+
+  - from: PROTECTION_DENONCIATEUR
+    to: EXAMEN_PRELIMINAIRE
+    action: PROTEGER
+    label: Mesures de protection activees
+
+  - from: EXAMEN_PRELIMINAIRE
+    to: DECISION_SUITE
+    action: EXAMINER
+    label: Examen preliminaire termine
+
+  - from: DECISION_SUITE
+    to: ENQUETE
+    action: ENQUETER
+    label: Ouvrir une enquete approfondie
+
+  - from: DECISION_SUITE
+    to: END_CLASSE
+    action: CLASSER
+    label: Classer sans suite
+    requires_comment: true
+
+  - from: ENQUETE
+    to: AUDITION
+    action: AUDITIONNER
+    label: Proceder a des auditions
+
+  - from: ENQUETE
+    to: REDACTION_RAPPORT
+    action: CONCLURE
+    label: Enquete terminee
+
+  - from: AUDITION
+    to: REDACTION_RAPPORT
+    action: TERMINER
+    label: Auditions terminees
+
+  - from: REDACTION_RAPPORT
+    to: DELIBERATION_ARMP
+    action: REDIGER
+    label: Rapport d'enquete soumis
+    requires_attachment: true
+
+  - from: DELIBERATION_ARMP
+    to: DECISION_ARMP
+    action: DELIBERER
+    label: Deliberation terminee
+
+  - from: DECISION_ARMP
+    to: NOTIFICATION_DECISION
+    action: STATUER
+    label: Decision rendue
+    requires_signature: true
+    requires_comment: true
+
+  - from: NOTIFICATION_DECISION
+    to: SANCTIONS
+    action: SANCTIONNER
+    label: Appliquer des sanctions
+    guard:
+      field: decision
+      operator: eq
+      value: SANCTIONS_ADMINISTRATIVES
+
+  - from: NOTIFICATION_DECISION
+    to: TRANSMISSION_JUSTICE
+    action: TRANSMETTRE_JUSTICE
+    label: Transmettre au procureur
+    guard:
+      field: decision
+      operator: eq
+      value: TRANSMISSION_JUSTICE
+
+  - from: NOTIFICATION_DECISION
+    to: MESURES_CORRECTIVES
+    action: CORRIGER
+    label: Appliquer des mesures correctives
+    guard:
+      field: decision
+      operator: eq
+      value: MESURES_CORRECTIVES
+
+  - from: NOTIFICATION_DECISION
+    to: END_CLASSE
+    action: CLASSER
+    label: Classement definitif
+    guard:
+      field: decision
+      operator: eq
+      value: CLASSEMENT_DEFINITIF
+
+  - from: SANCTIONS
+    to: SUIVI_EXECUTION
+    action: APPLIQUER
+    label: Sanctions appliquees
+
+  - from: TRANSMISSION_JUSTICE
+    to: END_JUSTICE
+    action: TRANSMETTRE
+    label: Dossier transmis a la justice
+
+  - from: MESURES_CORRECTIVES
+    to: SUIVI_EXECUTION
+    action: METTRE_EN_OEUVRE
+    label: Mesures mises en oeuvre
+
+  - from: SUIVI_EXECUTION
+    to: END_SANCTIONS
+    action: CLOTURER
+    label: Execution verifiee et cloturee

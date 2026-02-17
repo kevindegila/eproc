@@ -1,0 +1,161 @@
+# ============================================================
+# wf-avance — Avance de demarrage
+# Decret 2025-169, Art. 117
+# Processus de demande, verification et versement
+# de l'avance de demarrage au titulaire
+# ============================================================
+
+nodes:
+  - code: START
+    label: Demande d'avance de demarrage
+    type: START
+    mandatory: true
+
+  - code: DEPOT_DEMANDE
+    label: Depot de la demande d'avance
+    type: ACTION
+    assignee_role: OPERATEUR_ECONOMIQUE
+    sla_hours: 48
+    mandatory: true
+    triggers:
+      notification: PPM
+    config:
+      description: "Demande d'avance forfaitaire de demarrage (Art. 117)"
+      plafond_pourcentage: 20
+
+  - code: VERIFICATION_ELIGIBILITE
+    label: Verification d'eligibilite
+    type: ACTION
+    assignee_role: AGENT_PPM
+    sla_hours: 48
+    mandatory: true
+    config:
+      checks:
+        - contrat_signe
+        - ordre_service_emis
+        - caution_avance_fournie
+        - montant_dans_limites
+
+  - code: DECISION_ELIGIBILITE
+    label: Decision d'eligibilite
+    type: DECISION
+    assignee_role: AGENT_PPM
+    mandatory: true
+
+  - code: VERIFICATION_CAUTION
+    label: Verification de la caution d'avance
+    type: ACTION
+    assignee_role: AGENT_PPM
+    sla_hours: 48
+    mandatory: true
+    config:
+      description: "Verification de la caution bancaire couvrant 100% de l'avance"
+
+  - code: VALIDATION_PPM
+    label: Validation par le PPM
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 48
+    mandatory: true
+    triggers:
+      notification: ASSIGNEE
+
+  - code: ORDONNANCEMENT
+    label: Ordonnancement du paiement
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 48
+    mandatory: true
+
+  - code: MISE_EN_PAIEMENT
+    label: Mise en paiement
+    type: SYSTEM
+    mandatory: true
+    triggers:
+      notification: OPERATEUR_ECONOMIQUE
+    config:
+      description: "Transmission a la comptabilite pour virement"
+
+  - code: CONFIRMATION_PAIEMENT
+    label: Confirmation du virement
+    type: SYSTEM
+    mandatory: true
+    triggers:
+      notification: ALL
+
+  - code: END
+    label: Avance versee
+    type: END
+    mandatory: true
+
+  - code: END_REJETE
+    label: Demande d'avance rejetee
+    type: END
+
+transitions:
+  - from: START
+    to: DEPOT_DEMANDE
+    action: DEMARRER
+    label: Initier la demande d'avance
+
+  - from: DEPOT_DEMANDE
+    to: VERIFICATION_ELIGIBILITE
+    action: DEPOSER
+    label: Deposer la demande
+    requires_attachment: true
+
+  - from: VERIFICATION_ELIGIBILITE
+    to: DECISION_ELIGIBILITE
+    action: VERIFIER
+    label: Verification effectuee
+
+  - from: DECISION_ELIGIBILITE
+    to: VERIFICATION_CAUTION
+    action: ELIGIBLE
+    label: Demande eligible
+
+  - from: DECISION_ELIGIBILITE
+    to: END_REJETE
+    action: NON_ELIGIBLE
+    label: Demande non eligible
+    requires_comment: true
+
+  - from: VERIFICATION_CAUTION
+    to: VALIDATION_PPM
+    action: VALIDER_CAUTION
+    label: Caution conforme
+    requires_attachment: true
+
+  - from: VERIFICATION_CAUTION
+    to: END_REJETE
+    action: REJETER_CAUTION
+    label: Caution non conforme
+    requires_comment: true
+
+  - from: VALIDATION_PPM
+    to: ORDONNANCEMENT
+    action: VALIDER
+    label: PPM valide la demande
+    requires_signature: true
+
+  - from: VALIDATION_PPM
+    to: END_REJETE
+    action: REJETER
+    label: PPM rejette la demande
+    requires_comment: true
+
+  - from: ORDONNANCEMENT
+    to: MISE_EN_PAIEMENT
+    action: ORDONNANCER
+    label: Ordonnancement effectue
+    requires_signature: true
+
+  - from: MISE_EN_PAIEMENT
+    to: CONFIRMATION_PAIEMENT
+    action: PAYER
+    label: Virement effectue
+
+  - from: CONFIRMATION_PAIEMENT
+    to: END
+    action: CONFIRMER
+    label: Paiement confirme

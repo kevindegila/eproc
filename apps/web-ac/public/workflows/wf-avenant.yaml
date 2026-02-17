@@ -1,0 +1,227 @@
+# ============================================================
+# wf-avenant — Avenant / modification du contrat
+# Decret 2025-169, Art. 130-131
+# Processus d'elaboration et d'approbation d'un avenant
+# au marche public
+# ============================================================
+
+nodes:
+  - code: START
+    label: Demande d'avenant
+    type: START
+    mandatory: true
+
+  - code: SAISIE_AVENANT
+    label: Elaboration du projet d'avenant
+    type: ACTION
+    assignee_role: AGENT_PPM
+    sla_hours: 120
+    mandatory: true
+    triggers:
+      notification: ASSIGNEE
+    config:
+      description: "Redaction du projet d'avenant avec justification (Art. 130)"
+      max_increase_percent: 20
+
+  - code: DECISION_TYPE_AVENANT
+    label: Qualification du type d'avenant
+    type: DECISION
+    assignee_role: PPM
+    mandatory: true
+    config:
+      question: "L'avenant depasse-t-il 20% du montant initial ?"
+
+  - code: VERIFICATION_PLAFOND
+    label: Verification du plafond de 20%
+    type: SYSTEM
+    mandatory: true
+    config:
+      description: "Verification automatique que l'avenant ne depasse pas 20% (Art. 131)"
+
+  - code: VALIDATION_PPM
+    label: Validation par le PPM
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 48
+    mandatory: true
+    triggers:
+      notification: ASSIGNEE
+
+  - code: REVISION_AVENANT
+    label: Revision de l'avenant
+    type: LOOP
+    assignee_role: AGENT_PPM
+    sla_hours: 72
+
+  - code: APPROBATION_DNCMP
+    label: Approbation par la DNCMP
+    type: ACTION
+    assignee_role: DNCMP
+    sla_hours: 168
+    triggers:
+      notification: ASSIGNEE
+    config:
+      description: "Approbation obligatoire si marche au-dessus du seuil"
+
+  - code: DECISION_DNCMP
+    label: Decision DNCMP
+    type: DECISION
+    assignee_role: DNCMP
+
+  - code: NEGOCIATION_TITULAIRE
+    label: Negociation avec le titulaire
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 120
+    mandatory: true
+    triggers:
+      notification: OPERATEUR_ECONOMIQUE
+
+  - code: SIGNATURE_AVENANT
+    label: Signature de l'avenant
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 48
+    mandatory: true
+
+  - code: SIGNATURE_TITULAIRE
+    label: Signature par le titulaire
+    type: ACTION
+    assignee_role: OPERATEUR_ECONOMIQUE
+    sla_hours: 72
+    mandatory: true
+
+  - code: ENREGISTREMENT
+    label: Enregistrement de l'avenant
+    type: SYSTEM
+    mandatory: true
+    config:
+      description: "Mise a jour du contrat principal avec l'avenant"
+
+  - code: END
+    label: Avenant signe et enregistre
+    type: END
+    mandatory: true
+
+  - code: END_REJETE
+    label: Avenant rejete
+    type: END
+
+  - code: END_DEPASSEMENT
+    label: Avenant refuse (depassement 20%)
+    type: END
+
+transitions:
+  - from: START
+    to: SAISIE_AVENANT
+    action: DEMARRER
+    label: Initier la demande d'avenant
+
+  - from: SAISIE_AVENANT
+    to: VERIFICATION_PLAFOND
+    action: SOUMETTRE
+    label: Soumettre le projet d'avenant
+    requires_attachment: true
+    requires_comment: true
+
+  - from: VERIFICATION_PLAFOND
+    to: DECISION_TYPE_AVENANT
+    action: VERIFIER
+    label: Verification du plafond effectuee
+
+  - from: DECISION_TYPE_AVENANT
+    to: VALIDATION_PPM
+    action: CONFORME
+    label: Avenant dans les limites reglementaires
+    guard:
+      field: depassement_plafond
+      operator: eq
+      value: false
+
+  - from: DECISION_TYPE_AVENANT
+    to: END_DEPASSEMENT
+    action: DEPASSEMENT
+    label: Depassement du plafond de 20%
+    guard:
+      field: depassement_plafond
+      operator: eq
+      value: true
+    requires_comment: true
+
+  - from: VALIDATION_PPM
+    to: APPROBATION_DNCMP
+    action: VALIDER_VERS_DNCMP
+    label: Transmettre a la DNCMP pour approbation
+    guard:
+      field: montant_contrat
+      operator: gte
+      value: 100000000
+    requires_signature: true
+
+  - from: VALIDATION_PPM
+    to: NEGOCIATION_TITULAIRE
+    action: VALIDER_DIRECT
+    label: Valider et passer a la negociation
+    guard:
+      field: montant_contrat
+      operator: lt
+      value: 100000000
+    requires_signature: true
+
+  - from: VALIDATION_PPM
+    to: REVISION_AVENANT
+    action: REJETER
+    label: Demander une revision
+    requires_comment: true
+
+  - from: REVISION_AVENANT
+    to: VALIDATION_PPM
+    action: RESOUMETTRE
+    label: Resoumettre apres revision
+    requires_comment: true
+
+  - from: APPROBATION_DNCMP
+    to: DECISION_DNCMP
+    action: STATUER
+    label: DNCMP rend son avis
+
+  - from: DECISION_DNCMP
+    to: NEGOCIATION_TITULAIRE
+    action: APPROUVER
+    label: Avis favorable
+    requires_signature: true
+
+  - from: DECISION_DNCMP
+    to: REVISION_AVENANT
+    action: REJETER
+    label: Avis defavorable
+    requires_comment: true
+
+  - from: DECISION_DNCMP
+    to: END_REJETE
+    action: REJETER_DEFINITIF
+    label: Rejet definitif de l'avenant
+    requires_comment: true
+    requires_signature: true
+
+  - from: NEGOCIATION_TITULAIRE
+    to: SIGNATURE_AVENANT
+    action: CONCLURE
+    label: Negociation conclue
+
+  - from: SIGNATURE_AVENANT
+    to: SIGNATURE_TITULAIRE
+    action: SIGNER
+    label: AC signe l'avenant
+    requires_signature: true
+
+  - from: SIGNATURE_TITULAIRE
+    to: ENREGISTREMENT
+    action: SIGNER
+    label: Titulaire signe l'avenant
+    requires_signature: true
+
+  - from: ENREGISTREMENT
+    to: END
+    action: ENREGISTRER
+    label: Avenant enregistre

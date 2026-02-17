@@ -1,0 +1,200 @@
+# ============================================================
+# wf-arbitrage — Arbitrage par les organes competents
+# Decret 2025-169, Art. 147-150
+# Procedure d'arbitrage pour les litiges d'execution
+# des marches publics
+# ============================================================
+
+nodes:
+  - code: START
+    label: Demande d'arbitrage
+    type: START
+    mandatory: true
+
+  - code: SAISINE
+    label: Saisine de l'organe d'arbitrage
+    type: ACTION
+    assignee_role: OPERATEUR_ECONOMIQUE
+    mandatory: true
+    triggers:
+      notification: ARMP
+    config:
+      description: "Saisine de l'organe d'arbitrage competent (Art. 147)"
+      cross_workflow:
+        action: SUSPEND
+        target_entity_type: CONTRAT
+
+  - code: ENREGISTREMENT
+    label: Enregistrement de la demande
+    type: SYSTEM
+    mandatory: true
+    config:
+      auto_number: true
+
+  - code: VERIFICATION_COMPETENCE
+    label: Verification de la competence
+    type: ACTION
+    assignee_role: ARMP
+    sla_hours: 72
+    mandatory: true
+    config:
+      description: "Verification de la competence de l'organe et de la recevabilite (Art. 148)"
+
+  - code: DECISION_COMPETENCE
+    label: Decision de competence
+    type: DECISION
+    assignee_role: ARMP
+    mandatory: true
+
+  - code: CONSTITUTION_TRIBUNAL
+    label: Constitution du tribunal arbitral
+    type: ACTION
+    assignee_role: ARMP
+    sla_hours: 240
+    mandatory: true
+    config:
+      description: "Designation des arbitres (Art. 148)"
+      nombre_arbitres: 3
+
+  - code: NOTIFICATION_PARTIES
+    label: Notification aux parties
+    type: SYSTEM
+    sla_hours: 48
+    triggers:
+      notification: ALL
+
+  - code: ECHANGE_MEMOIRES
+    label: Echange des memoires
+    type: ACTION
+    assignee_role: ARMP
+    sla_hours: 720
+    mandatory: true
+    config:
+      description: "Memoire en demande, memoire en defense, replique"
+
+  - code: AUDIENCE_ARBITRALE
+    label: Audience arbitrale
+    type: ACTION
+    assignee_role: ARMP
+    sla_hours: 48
+    mandatory: true
+
+  - code: DELIBERATION
+    label: Deliberation du tribunal arbitral
+    type: ACTION
+    assignee_role: ARMP
+    sla_hours: 240
+    mandatory: true
+
+  - code: SENTENCE_ARBITRALE
+    label: Prononce de la sentence arbitrale
+    type: ACTION
+    assignee_role: ARMP
+    sla_hours: 72
+    mandatory: true
+    config:
+      description: "Sentence rendue dans les delais prevus (Art. 150)"
+
+  - code: NOTIFICATION_SENTENCE
+    label: Notification de la sentence
+    type: SYSTEM
+    mandatory: true
+    triggers:
+      notification: ALL
+    config:
+      cross_workflow:
+        action: RESUME
+        target_entity_type: CONTRAT
+
+  - code: EXECUTION_SENTENCE
+    label: Execution de la sentence
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 240
+    mandatory: true
+
+  - code: END
+    label: Arbitrage termine
+    type: END
+    mandatory: true
+
+  - code: END_INCOMPETENT
+    label: Organe incompetent
+    type: END
+
+transitions:
+  - from: START
+    to: SAISINE
+    action: DEMARRER
+    label: Initier la demande d'arbitrage
+
+  - from: SAISINE
+    to: ENREGISTREMENT
+    action: SAISIR
+    label: Deposer la demande
+    requires_attachment: true
+    requires_comment: true
+
+  - from: ENREGISTREMENT
+    to: VERIFICATION_COMPETENCE
+    action: ENREGISTRER
+    label: Demande enregistree
+
+  - from: VERIFICATION_COMPETENCE
+    to: DECISION_COMPETENCE
+    action: EXAMINER
+    label: Examen de competence effectue
+
+  - from: DECISION_COMPETENCE
+    to: CONSTITUTION_TRIBUNAL
+    action: COMPETENT
+    label: Organe competent
+
+  - from: DECISION_COMPETENCE
+    to: END_INCOMPETENT
+    action: INCOMPETENT
+    label: Organe incompetent
+    requires_comment: true
+
+  - from: CONSTITUTION_TRIBUNAL
+    to: NOTIFICATION_PARTIES
+    action: CONSTITUER
+    label: Tribunal arbitral constitue
+
+  - from: NOTIFICATION_PARTIES
+    to: ECHANGE_MEMOIRES
+    action: NOTIFIER
+    label: Parties notifiees
+
+  - from: ECHANGE_MEMOIRES
+    to: AUDIENCE_ARBITRALE
+    action: ECHANGER
+    label: Memoires echanges
+    requires_attachment: true
+
+  - from: AUDIENCE_ARBITRALE
+    to: DELIBERATION
+    action: TENIR
+    label: Audience tenue
+
+  - from: DELIBERATION
+    to: SENTENCE_ARBITRALE
+    action: DELIBERER
+    label: Deliberation terminee
+
+  - from: SENTENCE_ARBITRALE
+    to: NOTIFICATION_SENTENCE
+    action: PRONONCER
+    label: Sentence prononcee
+    requires_signature: true
+    requires_attachment: true
+
+  - from: NOTIFICATION_SENTENCE
+    to: EXECUTION_SENTENCE
+    action: NOTIFIER
+    label: Sentence notifiee
+
+  - from: EXECUTION_SENTENCE
+    to: END
+    action: EXECUTER
+    label: Sentence executee

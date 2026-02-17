@@ -1,0 +1,229 @@
+# ============================================================
+# wf-recours-prealable — Recours gracieux prealable
+# Decret 2025-169, Art. 137-140
+# Recours gracieux aupres de l'autorite contractante
+# avant tout recours devant l'ARMP
+# ============================================================
+
+nodes:
+  - code: START
+    label: Depot du recours gracieux
+    type: START
+    mandatory: true
+
+  - code: DEPOT_RECOURS
+    label: Depot du recours par le soumissionnaire
+    type: ACTION
+    assignee_role: OPERATEUR_ECONOMIQUE
+    mandatory: true
+    triggers:
+      notification: PPM
+    config:
+      description: "Recours gracieux prealable obligatoire (Art. 137)"
+      delai_depot_jours: 5
+
+  - code: ENREGISTREMENT
+    label: Enregistrement du recours
+    type: SYSTEM
+    mandatory: true
+    config:
+      auto_number: true
+      generate_receipt: true
+      cross_workflow:
+        action: SUSPEND
+        target_entity_type: DAC
+
+  - code: VERIFICATION_RECEVABILITE
+    label: Verification de la recevabilite
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 48
+    mandatory: true
+    config:
+      conditions:
+        - delai_respecte
+        - qualite_pour_agir
+        - interet_a_agir
+        - objet_precis
+
+  - code: DECISION_RECEVABILITE
+    label: Decision de recevabilite
+    type: DECISION
+    assignee_role: PPM
+    mandatory: true
+
+  - code: INSTRUCTION
+    label: Instruction du recours
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 120
+    mandatory: true
+    triggers:
+      notification: ASSIGNEE
+    config:
+      description: "Examen des griefs et preparation de la reponse (Art. 138)"
+
+  - code: NOTIFICATION_REQUERANT
+    label: Demande d'observations complementaires
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 48
+    triggers:
+      notification: OPERATEUR_ECONOMIQUE
+
+  - code: OBSERVATIONS_REQUERANT
+    label: Observations du requerant
+    type: ACTION
+    assignee_role: OPERATEUR_ECONOMIQUE
+    sla_hours: 120
+
+  - code: DECISION_AC
+    label: Decision de l'autorite contractante
+    type: DECISION
+    assignee_role: PPM
+    mandatory: true
+    sla_hours: 72
+    config:
+      description: "Decision dans un delai de 5 jours ouvrables (Art. 139)"
+      options:
+        - RECOURS_FONDE
+        - RECOURS_PARTIELLEMENT_FONDE
+        - RECOURS_REJETE
+
+  - code: NOTIFICATION_DECISION
+    label: Notification de la decision
+    type: SYSTEM
+    mandatory: true
+    sla_hours: 24
+    triggers:
+      notification: OPERATEUR_ECONOMIQUE
+    config:
+      description: "Notification motivee de la decision au requerant (Art. 140)"
+
+  - code: MESURES_CORRECTIVES
+    label: Mise en oeuvre des mesures correctives
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 120
+    triggers:
+      notification: ALL
+    config:
+      cross_workflow:
+        action: RESUME
+        target_entity_type: DAC
+
+  - code: DELAI_RECOURS_ARMP
+    label: Delai de recours devant l'ARMP
+    type: SYSTEM
+    sla_hours: 120
+    config:
+      description: "Le requerant dispose de 5 jours pour saisir l'ARMP (Art. 141)"
+      cross_workflow: wf-recours-armp
+
+  - code: END_FAVORABLE
+    label: Recours gracieux abouti
+    type: END
+    mandatory: true
+
+  - code: END_REJETE
+    label: Recours gracieux rejete
+    type: END
+    mandatory: true
+
+  - code: END_IRRECEVABLE
+    label: Recours irrecevable
+    type: END
+
+transitions:
+  - from: START
+    to: DEPOT_RECOURS
+    action: DEMARRER
+    label: Deposer le recours gracieux
+
+  - from: DEPOT_RECOURS
+    to: ENREGISTREMENT
+    action: DEPOSER
+    label: Deposer le recours
+    requires_attachment: true
+    requires_comment: true
+
+  - from: ENREGISTREMENT
+    to: VERIFICATION_RECEVABILITE
+    action: ENREGISTRER
+    label: Recours enregistre
+
+  - from: VERIFICATION_RECEVABILITE
+    to: DECISION_RECEVABILITE
+    action: EXAMINER
+    label: Examen de recevabilite effectue
+
+  - from: DECISION_RECEVABILITE
+    to: INSTRUCTION
+    action: RECEVABLE
+    label: Recours declare recevable
+
+  - from: DECISION_RECEVABILITE
+    to: END_IRRECEVABLE
+    action: IRRECEVABLE
+    label: Recours declare irrecevable
+    requires_comment: true
+
+  - from: INSTRUCTION
+    to: NOTIFICATION_REQUERANT
+    action: DEMANDER_OBSERVATIONS
+    label: Demander des observations complementaires
+
+  - from: INSTRUCTION
+    to: DECISION_AC
+    action: CONCLURE
+    label: Instruction terminee
+
+  - from: NOTIFICATION_REQUERANT
+    to: OBSERVATIONS_REQUERANT
+    action: NOTIFIER
+    label: Notification envoyee
+
+  - from: OBSERVATIONS_REQUERANT
+    to: INSTRUCTION
+    action: REPONDRE
+    label: Observations recues
+    requires_attachment: true
+
+  - from: DECISION_AC
+    to: NOTIFICATION_DECISION
+    action: STATUER
+    label: Decision rendue
+    requires_signature: true
+    requires_comment: true
+
+  # Recours fonde
+  - from: NOTIFICATION_DECISION
+    to: MESURES_CORRECTIVES
+    action: NOTIFIER_FAVORABLE
+    label: Decision favorable notifiee
+    guard:
+      field: decision
+      operator: in
+      value:
+        - RECOURS_FONDE
+        - RECOURS_PARTIELLEMENT_FONDE
+
+  # Recours rejete
+  - from: NOTIFICATION_DECISION
+    to: DELAI_RECOURS_ARMP
+    action: NOTIFIER_DEFAVORABLE
+    label: Decision defavorable notifiee
+    guard:
+      field: decision
+      operator: eq
+      value: RECOURS_REJETE
+
+  - from: MESURES_CORRECTIVES
+    to: END_FAVORABLE
+    action: CORRIGER
+    label: Mesures correctives appliquees
+
+  - from: DELAI_RECOURS_ARMP
+    to: END_REJETE
+    action: EXPIRER
+    label: Delai de recours ARMP expire

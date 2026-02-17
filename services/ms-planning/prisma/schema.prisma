@@ -1,0 +1,72 @@
+generator client {
+  provider        = "prisma-client-js"
+  output          = "../generated/prisma"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["planning"]
+}
+
+model ForecastPlan {
+  id               String   @id @default(uuid())
+  reference        String   @unique
+  title            String
+  fiscalYear       Int      @map("fiscal_year")
+  organizationId   String   @map("organization_id")
+  organizationName String?  @map("organization_name")
+  status         String   @default("BROUILLON")
+  totalAmount    Float    @default(0) @map("total_amount")
+  version        Int      @default(1)
+  fileName       String?  @map("file_name")
+  entries        MarketEntry[]
+  createdBy      String   @map("created_by")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("forecast_plans")
+  @@schema("planning")
+}
+
+model MarketEntry {
+  id              String       @id @default(uuid())
+  planId          String       @map("plan_id")
+  plan            ForecastPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  lineNumber      Int          @map("line_number")
+  description     String
+  marketType      String       @map("market_type")
+  method          String
+  estimatedAmount Float        @map("estimated_amount")
+  launchQuarter   Int          @map("launch_quarter")
+  fundingSource   String?      @map("funding_source")
+  referenceCode   String?      @map("reference_code")
+  category        String?
+  controlBody     String?      @map("control_body")
+  budgetLine      String?      @map("budget_line")
+  launchAuthDate  String?      @map("launch_auth_date")
+  milestones      Json?
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  @@map("market_entries")
+  @@schema("planning")
+}
+
+model GeneralNotice {
+  id             String   @id @default(uuid())
+  reference      String   @unique
+  title          String
+  organizationId String   @map("organization_id")
+  fiscalYear     Int      @map("fiscal_year")
+  content        String
+  publishedAt    DateTime? @map("published_at")
+  status         String   @default("BROUILLON")
+  createdBy      String   @map("created_by")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("general_notices")
+  @@schema("planning")
+}

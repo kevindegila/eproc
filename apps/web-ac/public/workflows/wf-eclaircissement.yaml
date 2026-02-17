@@ -1,0 +1,123 @@
+# ============================================================
+# wf-eclaircissement — Reponse aux eclaircissements
+# Decret 2025-169, Art. 154
+# Gestion des demandes d'eclaircissement des
+# soumissionnaires et reponses de l'autorite contractante
+# ============================================================
+
+nodes:
+  - code: START
+    label: Demande d'eclaircissement recue
+    type: START
+    mandatory: true
+
+  - code: ENREGISTREMENT
+    label: Enregistrement de la demande
+    type: SYSTEM
+    mandatory: true
+    triggers:
+      notification: PPM
+    config:
+      description: "Enregistrement automatique avec horodatage"
+      auto_acknowledge: true
+
+  - code: DECISION_RECEVABILITE
+    label: Examen de recevabilite
+    type: DECISION
+    assignee_role: PPM
+    sla_hours: 24
+    mandatory: true
+    config:
+      question: "La demande est-elle recevable et dans les delais ?"
+
+  - code: PREPARATION_REPONSE
+    label: Preparation de la reponse
+    type: ACTION
+    assignee_role: AGENT_PPM
+    sla_hours: 72
+    mandatory: true
+    triggers:
+      notification: ASSIGNEE
+
+  - code: VALIDATION_REPONSE
+    label: Validation de la reponse
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 24
+    triggers:
+      notification: ASSIGNEE
+
+  - code: REVISION_REPONSE
+    label: Revision de la reponse
+    type: LOOP
+    assignee_role: AGENT_PPM
+    sla_hours: 24
+
+  - code: DIFFUSION
+    label: Diffusion de la reponse a tous les soumissionnaires
+    type: SYSTEM
+    mandatory: true
+    triggers:
+      notification: ALL_SOUMISSIONNAIRES
+    config:
+      description: "Envoi anonymise a tous les soumissionnaires ayant retire le dossier (Art. 154)"
+      anonymize_sender: true
+
+  - code: END
+    label: Eclaircissement traite
+    type: END
+    mandatory: true
+
+  - code: END_IRRECEVABLE
+    label: Demande irrecevable
+    type: END
+
+transitions:
+  - from: START
+    to: ENREGISTREMENT
+    action: RECEVOIR
+    label: Recevoir la demande
+
+  - from: ENREGISTREMENT
+    to: DECISION_RECEVABILITE
+    action: ENREGISTRER
+    label: Enregistrer et transmettre au PPM
+
+  - from: DECISION_RECEVABILITE
+    to: PREPARATION_REPONSE
+    action: ACCEPTER
+    label: Declarer recevable
+
+  - from: DECISION_RECEVABILITE
+    to: END_IRRECEVABLE
+    action: REJETER
+    label: Declarer irrecevable (hors delai ou non pertinent)
+    requires_comment: true
+
+  - from: PREPARATION_REPONSE
+    to: VALIDATION_REPONSE
+    action: SOUMETTRE
+    label: Soumettre la reponse pour validation
+    requires_attachment: true
+
+  - from: VALIDATION_REPONSE
+    to: DIFFUSION
+    action: VALIDER
+    label: Valider et diffuser
+    requires_signature: true
+
+  - from: VALIDATION_REPONSE
+    to: REVISION_REPONSE
+    action: REJETER
+    label: Demander une revision
+    requires_comment: true
+
+  - from: REVISION_REPONSE
+    to: VALIDATION_REPONSE
+    action: RESOUMETTRE
+    label: Resoumettre la reponse corrigee
+
+  - from: DIFFUSION
+    to: END
+    action: DIFFUSER
+    label: Reponse diffusee avec succes

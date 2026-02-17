@@ -1,0 +1,162 @@
+# ============================================================
+# wf-ordre-service — Ordre de service
+# Decret 2025-169, Art. 103
+# Emission, notification et suivi des ordres de service
+# (demarrage, arret, reprise, etc.)
+# ============================================================
+
+nodes:
+  - code: START
+    label: Initiation de l'ordre de service
+    type: START
+    mandatory: true
+
+  - code: REDACTION_OS
+    label: Redaction de l'ordre de service
+    type: ACTION
+    assignee_role: AGENT_PPM
+    sla_hours: 48
+    mandatory: true
+    triggers:
+      notification: ASSIGNEE
+    config:
+      types_os:
+        - DEMARRAGE
+        - ARRET
+        - REPRISE
+        - AJOURNEMENT
+        - MODIFICATION_PROGRAMME
+
+  - code: VALIDATION_PPM
+    label: Validation par le PPM
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 24
+    mandatory: true
+    triggers:
+      notification: ASSIGNEE
+
+  - code: REVISION_OS
+    label: Revision de l'OS
+    type: LOOP
+    assignee_role: AGENT_PPM
+    sla_hours: 24
+
+  - code: SIGNATURE_AC
+    label: Signature par l'autorite contractante
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 24
+    mandatory: true
+
+  - code: NOTIFICATION_TITULAIRE
+    label: Notification au titulaire
+    type: SYSTEM
+    mandatory: true
+    sla_hours: 24
+    triggers:
+      notification: OPERATEUR_ECONOMIQUE
+    config:
+      description: "Notification electronique de l'OS avec accuse de reception"
+      require_acknowledgment: true
+
+  - code: ACCUSE_RECEPTION
+    label: Accuse de reception du titulaire
+    type: ACTION
+    assignee_role: OPERATEUR_ECONOMIQUE
+    sla_hours: 48
+    mandatory: true
+
+  - code: DECISION_RESERVE
+    label: Le titulaire a-t-il des reserves ?
+    type: DECISION
+    assignee_role: OPERATEUR_ECONOMIQUE
+    config:
+      question: "Le titulaire accepte-t-il l'OS sans reserves ?"
+
+  - code: TRAITEMENT_RESERVES
+    label: Traitement des reserves
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 72
+    triggers:
+      notification: ASSIGNEE
+
+  - code: PRISE_EFFET
+    label: Prise d'effet de l'OS
+    type: SYSTEM
+    mandatory: true
+    config:
+      description: "L'OS prend effet a la date specifiee ou a reception"
+
+  - code: END
+    label: Ordre de service en vigueur
+    type: END
+    mandatory: true
+
+transitions:
+  - from: START
+    to: REDACTION_OS
+    action: DEMARRER
+    label: Initier l'ordre de service
+
+  - from: REDACTION_OS
+    to: VALIDATION_PPM
+    action: SOUMETTRE
+    label: Soumettre pour validation
+    requires_attachment: true
+
+  - from: VALIDATION_PPM
+    to: SIGNATURE_AC
+    action: VALIDER
+    label: Valider l'OS
+    requires_signature: true
+
+  - from: VALIDATION_PPM
+    to: REVISION_OS
+    action: REJETER
+    label: Demander une revision
+    requires_comment: true
+
+  - from: REVISION_OS
+    to: VALIDATION_PPM
+    action: RESOUMETTRE
+    label: Resoumettre l'OS revise
+
+  - from: SIGNATURE_AC
+    to: NOTIFICATION_TITULAIRE
+    action: SIGNER
+    label: Signer et notifier
+    requires_signature: true
+
+  - from: NOTIFICATION_TITULAIRE
+    to: ACCUSE_RECEPTION
+    action: NOTIFIER
+    label: Notification envoyee
+
+  - from: ACCUSE_RECEPTION
+    to: DECISION_RESERVE
+    action: ACCUSER
+    label: Accuser reception
+
+  - from: DECISION_RESERVE
+    to: PRISE_EFFET
+    action: ACCEPTER_SANS_RESERVE
+    label: Acceptation sans reserves
+
+  - from: DECISION_RESERVE
+    to: TRAITEMENT_RESERVES
+    action: EMETTRE_RESERVES
+    label: Emettre des reserves
+    requires_comment: true
+
+  - from: TRAITEMENT_RESERVES
+    to: PRISE_EFFET
+    action: TRAITER
+    label: Reserves traitees
+    requires_comment: true
+
+  - from: PRISE_EFFET
+    to: END
+    action: ACTIVER
+    label: OS en vigueur

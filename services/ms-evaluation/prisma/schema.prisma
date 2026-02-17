@@ -1,0 +1,79 @@
+generator client {
+  provider        = "prisma-client-js"
+  output          = "../generated/prisma"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["evaluation"]
+}
+
+model OpeningSession {
+  id              String   @id @default(uuid())
+  dacId           String   @map("dac_id")
+  dacReference    String   @map("dac_reference")
+  sessionDate     DateTime @map("session_date")
+  location        String
+  status          String   @default("PROGRAMMEE")
+  presentMembers  String[] @map("present_members")
+  observations    String?
+  createdBy       String   @map("created_by")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("opening_sessions")
+  @@schema("evaluation")
+}
+
+model EvaluationSession {
+  id              String   @id @default(uuid())
+  dacId           String   @map("dac_id")
+  dacReference    String   @map("dac_reference")
+  type            String   @default("TECHNIQUE")
+  sessionDate     DateTime @map("session_date")
+  status          String   @default("EN_COURS")
+  scores          EvaluationScore[]
+  createdBy       String   @map("created_by")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("evaluation_sessions")
+  @@schema("evaluation")
+}
+
+model EvaluationScore {
+  id              String            @id @default(uuid())
+  sessionId       String            @map("session_id")
+  session         EvaluationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  submissionId    String            @map("submission_id")
+  operatorName    String            @map("operator_name")
+  criterion       String
+  score           Float
+  maxScore        Float             @map("max_score")
+  observations    String?
+  evaluatedBy     String            @map("evaluated_by")
+  createdAt       DateTime          @default(now()) @map("created_at")
+
+  @@map("evaluation_scores")
+  @@schema("evaluation")
+}
+
+model ProvisionalAward {
+  id              String   @id @default(uuid())
+  dacId           String   @map("dac_id")
+  dacReference    String   @map("dac_reference")
+  submissionId    String   @map("submission_id")
+  operatorName    String   @map("operator_name")
+  awardAmount     Float    @map("award_amount")
+  justification   String
+  awardDate       DateTime @map("award_date")
+  status          String   @default("PROVISOIRE")
+  createdBy       String   @map("created_by")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("provisional_awards")
+  @@schema("evaluation")
+}

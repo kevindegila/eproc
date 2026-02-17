@@ -1,0 +1,159 @@
+# ============================================================
+# wf-rapport-technique — Rapports periodiques
+# Decret 2025-169, Art. 106
+# Elaboration, validation et publication des rapports
+# periodiques de suivi d'execution
+# ============================================================
+
+nodes:
+  - code: START
+    label: Echeance de rapport periodique
+    type: START
+    mandatory: true
+
+  - code: REDACTION_RAPPORT
+    label: Redaction du rapport technique
+    type: ACTION
+    assignee_role: AGENT_PPM
+    sla_hours: 120
+    mandatory: true
+    triggers:
+      notification: ASSIGNEE
+    config:
+      description: "Rapport technique sur l'avancement des travaux/prestations (Art. 106)"
+      periodicite:
+        - MENSUEL
+        - TRIMESTRIEL
+        - SEMESTRIEL
+
+  - code: COLLECTE_DONNEES
+    label: Collecte des donnees d'avancement
+    type: ACTION
+    assignee_role: AGENT_PPM
+    sla_hours: 72
+    config:
+      data_points:
+        - taux_avancement_physique
+        - taux_avancement_financier
+        - problemes_rencontres
+        - mesures_correctives
+
+  - code: VALIDATION_TECHNIQUE
+    label: Validation technique
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 48
+    mandatory: true
+    triggers:
+      notification: ASSIGNEE
+
+  - code: REVISION_RAPPORT
+    label: Revision du rapport
+    type: LOOP
+    assignee_role: AGENT_PPM
+    sla_hours: 48
+
+  - code: DECISION_ALERTE
+    label: Le rapport revele-t-il des anomalies ?
+    type: DECISION
+    assignee_role: PPM
+    config:
+      question: "Des retards ou anomalies necessitent-ils une action corrective ?"
+
+  - code: PLAN_ACTION_CORRECTIF
+    label: Elaboration du plan d'action correctif
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 72
+    triggers:
+      notification: OPERATEUR_ECONOMIQUE
+    config:
+      description: "Plan d'action pour remedier aux retards ou anomalies"
+
+  - code: APPROBATION_RAPPORT
+    label: Approbation du rapport
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 24
+    mandatory: true
+
+  - code: DIFFUSION
+    label: Diffusion du rapport
+    type: SYSTEM
+    mandatory: true
+    triggers:
+      notification: ALL
+    config:
+      destinataires:
+        - AUTORITE_CONTRACTANTE
+        - DNCMP
+        - TITULAIRE
+
+  - code: END
+    label: Rapport publie
+    type: END
+    mandatory: true
+
+transitions:
+  - from: START
+    to: COLLECTE_DONNEES
+    action: DEMARRER
+    label: Demarrer la collecte des donnees
+
+  - from: COLLECTE_DONNEES
+    to: REDACTION_RAPPORT
+    action: COLLECTER
+    label: Donnees collectees
+
+  - from: REDACTION_RAPPORT
+    to: VALIDATION_TECHNIQUE
+    action: SOUMETTRE
+    label: Soumettre pour validation
+    requires_attachment: true
+
+  - from: VALIDATION_TECHNIQUE
+    to: DECISION_ALERTE
+    action: VALIDER
+    label: Rapport techniquement valide
+
+  - from: VALIDATION_TECHNIQUE
+    to: REVISION_RAPPORT
+    action: REJETER
+    label: Demander une revision
+    requires_comment: true
+
+  - from: REVISION_RAPPORT
+    to: VALIDATION_TECHNIQUE
+    action: RESOUMETTRE
+    label: Resoumettre le rapport revise
+
+  - from: DECISION_ALERTE
+    to: APPROBATION_RAPPORT
+    action: AUCUNE_ANOMALIE
+    label: Aucune anomalie detectee
+
+  - from: DECISION_ALERTE
+    to: PLAN_ACTION_CORRECTIF
+    action: ANOMALIE_DETECTEE
+    label: Anomalies detectees, action corrective requise
+    guard:
+      field: taux_retard
+      operator: gt
+      value: 10
+
+  - from: PLAN_ACTION_CORRECTIF
+    to: APPROBATION_RAPPORT
+    action: ELABORER
+    label: Plan d'action elabore
+    requires_attachment: true
+
+  - from: APPROBATION_RAPPORT
+    to: DIFFUSION
+    action: APPROUVER
+    label: Approuver et diffuser
+    requires_signature: true
+
+  - from: DIFFUSION
+    to: END
+    action: DIFFUSER
+    label: Rapport diffuse

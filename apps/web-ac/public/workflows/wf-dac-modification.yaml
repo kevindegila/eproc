@@ -1,0 +1,179 @@
+# ============================================================
+# wf-dac-modification — Modification du DAC
+# Decret 2025-169, Art. 74
+# Modification d'un DAC deja publie (additif,
+# prorogation de delai, correction d'erreur)
+# ============================================================
+
+nodes:
+  - code: START
+    label: Demande de modification
+    type: START
+    mandatory: true
+
+  - code: SAISIE_MODIFICATION
+    label: Saisie de la modification
+    type: ACTION
+    assignee_role: AGENT_PPM
+    sla_hours: 48
+    mandatory: true
+    triggers:
+      notification: ASSIGNEE
+    config:
+      modification_types:
+        - ADDITIF
+        - PROROGATION_DELAI
+        - CORRECTION_ERREUR
+        - MODIFICATION_CRITERES
+
+  - code: DECISION_TYPE
+    label: Evaluation du type de modification
+    type: DECISION
+    assignee_role: PPM
+    mandatory: true
+    config:
+      question: "Nature de la modification : impacte-t-elle les criteres substantiels ?"
+
+  - code: VALIDATION_PPM
+    label: Validation par le PPM
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 24
+    mandatory: true
+    triggers:
+      notification: ASSIGNEE
+
+  - code: EXAMEN_DNCMP
+    label: Examen DNCMP (modification substantielle)
+    type: ACTION
+    assignee_role: DNCMP
+    sla_hours: 120
+    triggers:
+      notification: ASSIGNEE
+
+  - code: DECISION_DNCMP
+    label: Decision DNCMP
+    type: DECISION
+    assignee_role: DNCMP
+
+  - code: REVISION_MODIFICATION
+    label: Revision de la modification
+    type: LOOP
+    assignee_role: AGENT_PPM
+    sla_hours: 48
+
+  - code: PUBLICATION_ADDITIF
+    label: Publication de l'additif
+    type: SYSTEM
+    mandatory: true
+    triggers:
+      notification: ALL
+    config:
+      channels:
+        - PORTAIL_NATIONAL
+        - EMAIL_SOUMISSIONNAIRES_RETIRES
+
+  - code: PROROGATION_DELAI
+    label: Prorogation automatique du delai
+    type: SYSTEM
+    config:
+      description: "Si modification substantielle, proroger le delai de soumission (Art. 74 al. 3)"
+      min_prorogation_days: 10
+
+  - code: END
+    label: Modification publiee
+    type: END
+    mandatory: true
+
+  - code: END_REJETE
+    label: Modification rejetee
+    type: END
+
+transitions:
+  - from: START
+    to: SAISIE_MODIFICATION
+    action: DEMARRER
+    label: Demarrer la modification
+
+  - from: SAISIE_MODIFICATION
+    to: DECISION_TYPE
+    action: SOUMETTRE
+    label: Soumettre pour evaluation
+    requires_attachment: true
+
+  # Modification mineure -> validation PPM directe
+  - from: DECISION_TYPE
+    to: VALIDATION_PPM
+    action: QUALIFIER_MINEURE
+    label: Qualifier comme modification mineure
+    guard:
+      field: type_modification
+      operator: in
+      value:
+        - CORRECTION_ERREUR
+        - PROROGATION_DELAI
+
+  # Modification substantielle -> DNCMP
+  - from: DECISION_TYPE
+    to: EXAMEN_DNCMP
+    action: QUALIFIER_SUBSTANTIELLE
+    label: Qualifier comme modification substantielle
+    guard:
+      field: type_modification
+      operator: in
+      value:
+        - ADDITIF
+        - MODIFICATION_CRITERES
+
+  - from: VALIDATION_PPM
+    to: PUBLICATION_ADDITIF
+    action: VALIDER
+    label: Valider la modification
+    requires_signature: true
+
+  - from: VALIDATION_PPM
+    to: REVISION_MODIFICATION
+    action: REJETER
+    label: Demander une revision
+    requires_comment: true
+
+  - from: REVISION_MODIFICATION
+    to: VALIDATION_PPM
+    action: RESOUMETTRE
+    label: Resoumettre apres revision
+    requires_comment: true
+
+  - from: EXAMEN_DNCMP
+    to: DECISION_DNCMP
+    action: STATUER
+    label: Rendre l'avis
+
+  - from: DECISION_DNCMP
+    to: PROROGATION_DELAI
+    action: APPROUVER
+    label: Approuver la modification
+    requires_signature: true
+    requires_comment: true
+
+  - from: DECISION_DNCMP
+    to: REVISION_MODIFICATION
+    action: REJETER
+    label: Rejeter la modification
+    requires_comment: true
+
+  - from: DECISION_DNCMP
+    to: END_REJETE
+    action: REJETER_DEFINITIF
+    label: Rejet definitif
+    requires_comment: true
+    requires_signature: true
+
+  - from: PROROGATION_DELAI
+    to: PUBLICATION_ADDITIF
+    action: PROROGER
+    label: Appliquer la prorogation et publier
+
+  - from: PUBLICATION_ADDITIF
+    to: END
+    action: PUBLIER
+    label: Additif publie

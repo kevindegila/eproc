@@ -1,0 +1,50 @@
+generator client {
+  provider        = "prisma-client-js"
+  output          = "../generated/prisma"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["contract"]
+}
+
+model Contract {
+  id               String   @id @default(uuid())
+  reference        String   @unique
+  dacId            String   @map("dac_id")
+  dacReference     String   @map("dac_reference")
+  title            String
+  operatorId       String   @map("operator_id")
+  operatorName     String   @map("operator_name")
+  organizationId   String   @map("organization_id")
+  amount           Float
+  status           String   @default("BROUILLON")
+  signatureDate    DateTime? @map("signature_date")
+  approvalDate     DateTime? @map("approval_date")
+  notificationDate DateTime? @map("notification_date")
+  startDate        DateTime? @map("start_date")
+  endDate          DateTime? @map("end_date")
+  signatures       ContractSignature[]
+  createdBy        String   @map("created_by")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@map("contracts")
+  @@schema("contract")
+}
+
+model ContractSignature {
+  id          String   @id @default(uuid())
+  contractId  String   @map("contract_id")
+  contract    Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  signerName  String   @map("signer_name")
+  signerRole  String   @map("signer_role")
+  signedAt    DateTime @default(now()) @map("signed_at")
+  observations String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("contract_signatures")
+  @@schema("contract")
+}

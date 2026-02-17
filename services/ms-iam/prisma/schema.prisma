@@ -1,0 +1,88 @@
+generator client {
+  provider        = "prisma-client-js"
+  output          = "../generated/prisma"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["iam"]
+}
+
+model User {
+  id             String     @id @default(uuid())
+  email          String     @unique
+  password       String
+  firstName      String     @map("first_name")
+  lastName       String     @map("last_name")
+  phone          String?
+  status         String     @default("ACTIVE")
+  organizationId String?    @map("organization_id")
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  userRoles      UserRole[]
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+
+  @@map("users")
+  @@schema("iam")
+}
+
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  type      String
+  sigle     String?
+  address   String?
+  phone     String?
+  email     String?
+  nif       String?
+  rccm      String?
+  users     User[]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("organizations")
+  @@schema("iam")
+}
+
+model Role {
+  id          String       @id @default(uuid())
+  code        String       @unique
+  name        String
+  description String?
+  permissions Permission[]
+  userRoles   UserRole[]
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  @@map("roles")
+  @@schema("iam")
+}
+
+model Permission {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  description String?
+  roleId      String   @map("role_id")
+  role        Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("permissions")
+  @@schema("iam")
+}
+
+model UserRole {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  roleId    String   @map("role_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+  @@schema("iam")
+}

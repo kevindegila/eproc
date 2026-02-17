@@ -1,0 +1,245 @@
+# ============================================================
+# wf-recours-armp — Recours devant l'ARMP
+# Decret 2025-169, Art. 141-146
+# Saisine de l'Autorite de Regulation des Marches Publics
+# apres echec du recours gracieux
+# ============================================================
+
+nodes:
+  - code: START
+    label: Saisine de l'ARMP
+    type: START
+    mandatory: true
+
+  - code: DEPOT_RECOURS
+    label: Depot du recours devant l'ARMP
+    type: ACTION
+    assignee_role: OPERATEUR_ECONOMIQUE
+    mandatory: true
+    triggers:
+      notification: ARMP
+    config:
+      description: "Saisine de l'ARMP dans un delai de 5 jours apres notification du recours gracieux (Art. 141)"
+      delai_depot_jours: 5
+      prerequis: recours_gracieux_rejete
+
+  - code: ENREGISTREMENT
+    label: Enregistrement par le secretariat de l'ARMP
+    type: SYSTEM
+    mandatory: true
+    config:
+      auto_number: true
+      cross_workflow:
+        action: SUSPEND
+        target_entity_type: DAC
+
+  - code: VERIFICATION_RECEVABILITE
+    label: Examen de la recevabilite
+    type: ACTION
+    assignee_role: AGENT_ARMP
+    sla_hours: 48
+    mandatory: true
+    config:
+      conditions:
+        - recours_gracieux_prealable
+        - delai_respecte
+        - interet_a_agir
+        - caution_deposee
+
+  - code: DECISION_RECEVABILITE
+    label: Decision de recevabilite
+    type: DECISION
+    assignee_role: ARMP
+    mandatory: true
+
+  - code: NOTIFICATION_AC
+    label: Notification a l'autorite contractante
+    type: SYSTEM
+    mandatory: true
+    sla_hours: 24
+    triggers:
+      notification: PPM
+    config:
+      description: "L'AC dispose de 8 jours pour presenter ses observations (Art. 143)"
+
+  - code: OBSERVATIONS_AC
+    label: Observations de l'autorite contractante
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 192
+    triggers:
+      notification: ARMP
+
+  - code: INSTRUCTION_ARMP
+    label: Instruction par l'ARMP
+    type: ACTION
+    assignee_role: AGENT_ARMP
+    sla_hours: 120
+    mandatory: true
+    triggers:
+      notification: ASSIGNEE
+    config:
+      description: "Instruction du dossier, auditions eventuelles (Art. 144)"
+
+  - code: AUDIENCE
+    label: Audience de la commission (si necessaire)
+    type: ACTION
+    assignee_role: ARMP
+    sla_hours: 48
+    config:
+      description: "Seance de la commission de reglement des differends"
+
+  - code: DELIBERATION
+    label: Deliberation de l'ARMP
+    type: ACTION
+    assignee_role: ARMP
+    sla_hours: 72
+    mandatory: true
+    config:
+      description: "Decision dans un delai de 15 jours apres saisine (Art. 145)"
+
+  - code: DECISION_ARMP
+    label: Decision de l'ARMP
+    type: DECISION
+    assignee_role: ARMP
+    mandatory: true
+    config:
+      options:
+        - ANNULATION_PROCEDURE
+        - CORRECTION_IRREGULARITE
+        - REJET_RECOURS
+        - SUSPENSION_PROCEDURE
+
+  - code: NOTIFICATION_DECISION
+    label: Notification de la decision
+    type: SYSTEM
+    mandatory: true
+    sla_hours: 24
+    triggers:
+      notification: ALL
+    config:
+      description: "Notification de la decision motivee a toutes les parties (Art. 146)"
+
+  - code: EXECUTION_DECISION
+    label: Execution de la decision
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 120
+    triggers:
+      notification: PPM
+    config:
+      cross_workflow:
+        action: RESUME_OR_CANCEL
+        target_entity_type: DAC
+
+  - code: END_FAVORABLE
+    label: Recours ARMP accueilli
+    type: END
+    mandatory: true
+
+  - code: END_REJETE
+    label: Recours ARMP rejete
+    type: END
+    mandatory: true
+
+  - code: END_IRRECEVABLE
+    label: Recours irrecevable
+    type: END
+
+transitions:
+  - from: START
+    to: DEPOT_RECOURS
+    action: DEMARRER
+    label: Saisir l'ARMP
+
+  - from: DEPOT_RECOURS
+    to: ENREGISTREMENT
+    action: DEPOSER
+    label: Deposer le recours
+    requires_attachment: true
+    requires_comment: true
+
+  - from: ENREGISTREMENT
+    to: VERIFICATION_RECEVABILITE
+    action: ENREGISTRER
+    label: Recours enregistre
+
+  - from: VERIFICATION_RECEVABILITE
+    to: DECISION_RECEVABILITE
+    action: EXAMINER
+    label: Examen termine
+
+  - from: DECISION_RECEVABILITE
+    to: NOTIFICATION_AC
+    action: RECEVABLE
+    label: Recours recevable
+
+  - from: DECISION_RECEVABILITE
+    to: END_IRRECEVABLE
+    action: IRRECEVABLE
+    label: Recours irrecevable
+    requires_comment: true
+
+  - from: NOTIFICATION_AC
+    to: OBSERVATIONS_AC
+    action: NOTIFIER
+    label: AC notifiee
+
+  - from: OBSERVATIONS_AC
+    to: INSTRUCTION_ARMP
+    action: SOUMETTRE
+    label: Observations recues
+    requires_attachment: true
+
+  - from: INSTRUCTION_ARMP
+    to: AUDIENCE
+    action: CONVOQUER_AUDIENCE
+    label: Convoquer une audience
+
+  - from: INSTRUCTION_ARMP
+    to: DELIBERATION
+    action: CONCLURE
+    label: Instruction terminee sans audience
+
+  - from: AUDIENCE
+    to: DELIBERATION
+    action: TENIR
+    label: Audience tenue
+
+  - from: DELIBERATION
+    to: DECISION_ARMP
+    action: DELIBERER
+    label: Deliberation terminee
+
+  - from: DECISION_ARMP
+    to: NOTIFICATION_DECISION
+    action: STATUER
+    label: Decision rendue
+    requires_signature: true
+    requires_comment: true
+
+  - from: NOTIFICATION_DECISION
+    to: EXECUTION_DECISION
+    action: NOTIFIER_FAVORABLE
+    label: Decision favorable, execution requise
+    guard:
+      field: decision
+      operator: in
+      value:
+        - ANNULATION_PROCEDURE
+        - CORRECTION_IRREGULARITE
+        - SUSPENSION_PROCEDURE
+
+  - from: NOTIFICATION_DECISION
+    to: END_REJETE
+    action: NOTIFIER_DEFAVORABLE
+    label: Recours rejete
+    guard:
+      field: decision
+      operator: eq
+      value: REJET_RECOURS
+
+  - from: EXECUTION_DECISION
+    to: END_FAVORABLE
+    action: EXECUTER
+    label: Decision executee

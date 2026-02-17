@@ -1,0 +1,214 @@
+# ============================================================
+# wf-facture — Paiement des factures
+# Decret 2025-169, Art. 118
+# Circuit complet de traitement des factures depuis
+# le depot jusqu'au paiement effectif
+# ============================================================
+
+nodes:
+  - code: START
+    label: Reception de la facture
+    type: START
+    mandatory: true
+
+  - code: DEPOT_FACTURE
+    label: Depot de la facture par le titulaire
+    type: ACTION
+    assignee_role: OPERATEUR_ECONOMIQUE
+    mandatory: true
+    triggers:
+      notification: PPM
+    config:
+      description: "Depot electronique de la facture avec pieces justificatives (Art. 118)"
+
+  - code: ENREGISTREMENT
+    label: Enregistrement de la facture
+    type: SYSTEM
+    mandatory: true
+    config:
+      auto_number: true
+      generate_receipt: true
+
+  - code: VERIFICATION_SERVICE_FAIT
+    label: Verification du service fait
+    type: ACTION
+    assignee_role: AGENT_PPM
+    sla_hours: 120
+    mandatory: true
+    triggers:
+      notification: ASSIGNEE
+    config:
+      description: "Verification que les travaux/fournitures/services ont ete effectivement realises"
+      checks:
+        - decompte_approuve
+        - pv_reception
+        - conformite_contrat
+
+  - code: DECISION_SERVICE_FAIT
+    label: Attestation de service fait
+    type: DECISION
+    assignee_role: AGENT_PPM
+    mandatory: true
+
+  - code: LIQUIDATION
+    label: Liquidation de la facture
+    type: ACTION
+    assignee_role: AGENT_PPM
+    sla_hours: 72
+    mandatory: true
+    config:
+      description: "Calcul du montant a payer apres deductions (avance, penalites, retenue)"
+      deductions:
+        - remboursement_avance
+        - penalites_retard
+        - retenue_garantie
+
+  - code: VALIDATION_PPM
+    label: Validation par le PPM
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 48
+    mandatory: true
+    triggers:
+      notification: ASSIGNEE
+
+  - code: REVISION_FACTURE
+    label: Revision de la facture
+    type: LOOP
+    assignee_role: AGENT_PPM
+    sla_hours: 48
+
+  - code: ORDONNANCEMENT
+    label: Ordonnancement
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 48
+    mandatory: true
+    config:
+      description: "Emission du mandat de paiement"
+
+  - code: CONTROLE_COMPTABLE
+    label: Controle du comptable public
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 72
+    mandatory: true
+    config:
+      description: "Verification de la regularite de la depense par le comptable"
+
+  - code: DECISION_COMPTABLE
+    label: Decision du comptable
+    type: DECISION
+    mandatory: true
+
+  - code: MISE_EN_PAIEMENT
+    label: Mise en paiement
+    type: SYSTEM
+    mandatory: true
+    sla_hours: 48
+    config:
+      description: "Virement bancaire au titulaire"
+
+  - code: CONFIRMATION_PAIEMENT
+    label: Confirmation du paiement
+    type: SYSTEM
+    mandatory: true
+    triggers:
+      notification: OPERATEUR_ECONOMIQUE
+
+  - code: END
+    label: Facture payee
+    type: END
+    mandatory: true
+
+  - code: END_REJETEE
+    label: Facture rejetee
+    type: END
+
+transitions:
+  - from: START
+    to: DEPOT_FACTURE
+    action: DEMARRER
+    label: Recevoir la facture
+
+  - from: DEPOT_FACTURE
+    to: ENREGISTREMENT
+    action: DEPOSER
+    label: Deposer la facture
+    requires_attachment: true
+
+  - from: ENREGISTREMENT
+    to: VERIFICATION_SERVICE_FAIT
+    action: ENREGISTRER
+    label: Facture enregistree
+
+  - from: VERIFICATION_SERVICE_FAIT
+    to: DECISION_SERVICE_FAIT
+    action: VERIFIER
+    label: Verification effectuee
+
+  - from: DECISION_SERVICE_FAIT
+    to: LIQUIDATION
+    action: ATTESTER
+    label: Service fait atteste
+    requires_signature: true
+
+  - from: DECISION_SERVICE_FAIT
+    to: END_REJETEE
+    action: REJETER
+    label: Service fait non atteste
+    requires_comment: true
+
+  - from: LIQUIDATION
+    to: VALIDATION_PPM
+    action: LIQUIDER
+    label: Facture liquidee
+
+  - from: VALIDATION_PPM
+    to: ORDONNANCEMENT
+    action: VALIDER
+    label: Validation PPM
+    requires_signature: true
+
+  - from: VALIDATION_PPM
+    to: REVISION_FACTURE
+    action: REJETER
+    label: Demander une revision
+    requires_comment: true
+
+  - from: REVISION_FACTURE
+    to: VALIDATION_PPM
+    action: RESOUMETTRE
+    label: Resoumettre apres revision
+
+  - from: ORDONNANCEMENT
+    to: CONTROLE_COMPTABLE
+    action: ORDONNANCER
+    label: Mandat de paiement emis
+    requires_signature: true
+
+  - from: CONTROLE_COMPTABLE
+    to: DECISION_COMPTABLE
+    action: CONTROLER
+    label: Controle comptable effectue
+
+  - from: DECISION_COMPTABLE
+    to: MISE_EN_PAIEMENT
+    action: VALIDER
+    label: Depense reguliere, payer
+
+  - from: DECISION_COMPTABLE
+    to: REVISION_FACTURE
+    action: REJETER
+    label: Irregularite, retour pour correction
+    requires_comment: true
+
+  - from: MISE_EN_PAIEMENT
+    to: CONFIRMATION_PAIEMENT
+    action: PAYER
+    label: Virement effectue
+
+  - from: CONFIRMATION_PAIEMENT
+    to: END
+    action: CONFIRMER
+    label: Paiement confirme au titulaire

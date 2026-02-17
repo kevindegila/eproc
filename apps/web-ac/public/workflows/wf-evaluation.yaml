@@ -1,0 +1,303 @@
+# ============================================================
+# wf-evaluation — Evaluation & attribution
+# Decret 2025-169, Art. 89-93
+# Evaluation technique, financiere et attribution
+# provisoire puis definitive du marche
+# ============================================================
+
+nodes:
+  - code: START
+    label: Lancement de l'evaluation
+    type: START
+    mandatory: true
+
+  - code: CONSTITUTION_SOUS_COMMISSION
+    label: Constitution de la sous-commission d'evaluation
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 48
+    mandatory: true
+    triggers:
+      notification: MEMBRES_COMMISSION
+
+  - code: EVALUATION_TECHNIQUE
+    label: Evaluation technique des offres
+    type: ACTION
+    assignee_role: MEMBRE_COMMISSION
+    sla_hours: 240
+    mandatory: true
+    config:
+      description: "Evaluation selon les criteres du DAO (Art. 89)"
+      scoring: true
+
+  - code: DECISION_ADMISSIBILITE
+    label: Decision d'admissibilite technique
+    type: DECISION
+    assignee_role: MEMBRE_COMMISSION
+    mandatory: true
+    config:
+      question: "Des offres sont-elles techniquement admissibles ?"
+
+  - code: EVALUATION_FINANCIERE
+    label: Evaluation financiere des offres admissibles
+    type: ACTION
+    assignee_role: MEMBRE_COMMISSION
+    sla_hours: 120
+    mandatory: true
+    config:
+      description: "Ouverture des offres financieres, verification arithmetique, classement (Art. 90)"
+
+  - code: CLASSEMENT
+    label: Classement final des offres
+    type: ACTION
+    assignee_role: MEMBRE_COMMISSION
+    sla_hours: 48
+    mandatory: true
+
+  - code: REDACTION_RAPPORT
+    label: Redaction du rapport d'evaluation
+    type: ACTION
+    assignee_role: MEMBRE_COMMISSION
+    sla_hours: 72
+    mandatory: true
+
+  - code: PROPOSITION_ATTRIBUTION
+    label: Proposition d'attribution provisoire
+    type: ACTION
+    assignee_role: MEMBRE_COMMISSION
+    sla_hours: 24
+    mandatory: true
+    config:
+      description: "Proposition d'attribution au moins-disant ou mieux-disant (Art. 91)"
+
+  - code: VALIDATION_PPM
+    label: Validation par le PPM
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 48
+    mandatory: true
+    triggers:
+      notification: ASSIGNEE
+
+  - code: DECISION_SEUIL_DNCMP
+    label: Verification du seuil DNCMP
+    type: DECISION
+    assignee_role: PPM
+    mandatory: true
+
+  - code: EXAMEN_DNCMP
+    label: Examen d'attribution par la DNCMP
+    type: ACTION
+    assignee_role: DNCMP
+    sla_hours: 168
+    mandatory: true
+    triggers:
+      notification: ASSIGNEE
+
+  - code: DECISION_DNCMP
+    label: Decision DNCMP sur l'attribution
+    type: DECISION
+    assignee_role: DNCMP
+    mandatory: true
+
+  - code: ATTRIBUTION_PROVISOIRE
+    label: Notification d'attribution provisoire
+    type: SYSTEM
+    mandatory: true
+    triggers:
+      notification: ALL_SOUMISSIONNAIRES
+    config:
+      description: "Publication de l'attribution provisoire, ouverture du delai de recours (Art. 92)"
+      standstill_days: 10
+
+  - code: DELAI_STANDSTILL
+    label: Delai de standstill (recours)
+    type: SYSTEM
+    mandatory: true
+    sla_hours: 240
+    config:
+      description: "Periode de 10 jours pour depot de recours (Art. 92 al. 2)"
+      cross_workflow: wf-recours-prealable
+
+  - code: DECISION_RECOURS
+    label: Verification des recours deposes
+    type: DECISION
+    mandatory: true
+    config:
+      question: "Des recours ont-ils ete deposes pendant le standstill ?"
+
+  - code: ATTRIBUTION_DEFINITIVE
+    label: Attribution definitive
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 48
+    mandatory: true
+    triggers:
+      notification: ALL
+      cascade_workflow: wf-contrat
+    config:
+      description: "Attribution definitive apres ecoulement du standstill (Art. 93)"
+
+  - code: REVISION_EVALUATION
+    label: Revision de l'evaluation
+    type: LOOP
+    assignee_role: MEMBRE_COMMISSION
+    sla_hours: 120
+
+  - code: END
+    label: Attribution terminee
+    type: END
+    mandatory: true
+
+  - code: END_INFRUCTUEUX
+    label: Appel d'offres declare infructueux
+    type: END
+
+transitions:
+  - from: START
+    to: CONSTITUTION_SOUS_COMMISSION
+    action: DEMARRER
+    label: Demarrer l'evaluation
+
+  - from: CONSTITUTION_SOUS_COMMISSION
+    to: EVALUATION_TECHNIQUE
+    action: CONSTITUER
+    label: Sous-commission constituee
+
+  - from: EVALUATION_TECHNIQUE
+    to: DECISION_ADMISSIBILITE
+    action: EVALUER
+    label: Evaluation technique terminee
+    requires_attachment: true
+
+  - from: DECISION_ADMISSIBILITE
+    to: EVALUATION_FINANCIERE
+    action: DECLARER_ADMISSIBLE
+    label: Au moins une offre admissible
+
+  - from: DECISION_ADMISSIBILITE
+    to: END_INFRUCTUEUX
+    action: DECLARER_INFRUCTUEUX
+    label: Aucune offre admissible
+    requires_comment: true
+    requires_signature: true
+
+  - from: EVALUATION_FINANCIERE
+    to: CLASSEMENT
+    action: EVALUER_FINANCE
+    label: Evaluation financiere terminee
+
+  - from: CLASSEMENT
+    to: REDACTION_RAPPORT
+    action: CLASSER
+    label: Classement etabli
+
+  - from: REDACTION_RAPPORT
+    to: PROPOSITION_ATTRIBUTION
+    action: REDIGER
+    label: Rapport d'evaluation finalise
+    requires_attachment: true
+
+  - from: PROPOSITION_ATTRIBUTION
+    to: VALIDATION_PPM
+    action: PROPOSER
+    label: Soumettre la proposition d'attribution
+    requires_signature: true
+
+  - from: VALIDATION_PPM
+    to: DECISION_SEUIL_DNCMP
+    action: VALIDER
+    label: PPM valide la proposition
+
+  - from: VALIDATION_PPM
+    to: REVISION_EVALUATION
+    action: REJETER
+    label: PPM demande une revision
+    requires_comment: true
+
+  - from: REVISION_EVALUATION
+    to: PROPOSITION_ATTRIBUTION
+    action: RESOUMETTRE
+    label: Resoumettre apres revision
+    requires_comment: true
+
+  # Sous seuil -> attribution provisoire directe
+  - from: DECISION_SEUIL_DNCMP
+    to: ATTRIBUTION_PROVISOIRE
+    action: VALIDER_DIRECT
+    label: Sous seuil DNCMP, attribution directe
+    guard:
+      field: montant
+      operator: lt
+      value: 100000000
+
+  # Au-dessus du seuil -> DNCMP
+  - from: DECISION_SEUIL_DNCMP
+    to: EXAMEN_DNCMP
+    action: TRANSMETTRE_DNCMP
+    label: Transmettre a la DNCMP pour avis
+    guard:
+      field: montant
+      operator: gte
+      value: 100000000
+
+  - from: EXAMEN_DNCMP
+    to: DECISION_DNCMP
+    action: STATUER
+    label: DNCMP rend son avis
+
+  - from: DECISION_DNCMP
+    to: ATTRIBUTION_PROVISOIRE
+    action: APPROUVER
+    label: Avis favorable DNCMP
+    requires_signature: true
+
+  - from: DECISION_DNCMP
+    to: REVISION_EVALUATION
+    action: REJETER
+    label: Avis defavorable DNCMP
+    requires_comment: true
+
+  - from: ATTRIBUTION_PROVISOIRE
+    to: DELAI_STANDSTILL
+    action: NOTIFIER
+    label: Notifier l'attribution provisoire
+
+  - from: DELAI_STANDSTILL
+    to: DECISION_RECOURS
+    action: EXPIRER
+    label: Delai de standstill ecoule
+
+  - from: DECISION_RECOURS
+    to: ATTRIBUTION_DEFINITIVE
+    action: AUCUN_RECOURS
+    label: Aucun recours depose
+    guard:
+      field: recours_deposes
+      operator: eq
+      value: 0
+
+  - from: DECISION_RECOURS
+    to: ATTRIBUTION_DEFINITIVE
+    action: RECOURS_REJETE
+    label: Recours deposes mais rejetes
+    guard:
+      field: recours_acceptes
+      operator: eq
+      value: 0
+
+  - from: DECISION_RECOURS
+    to: REVISION_EVALUATION
+    action: RECOURS_ACCEPTE
+    label: Recours accepte, revision necessaire
+    guard:
+      field: recours_acceptes
+      operator: gt
+      value: 0
+    requires_comment: true
+
+  - from: ATTRIBUTION_DEFINITIVE
+    to: END
+    action: ATTRIBUER
+    label: Attribution definitive prononcee
+    requires_signature: true

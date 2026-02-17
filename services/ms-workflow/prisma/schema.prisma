@@ -1,0 +1,159 @@
+generator client {
+  provider        = "prisma-client-js"
+  output          = "../generated/prisma"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["workflow"]
+}
+
+model WorkflowDefinition {
+  id              String   @id @default(uuid())
+  organisationId  String?  @map("organisation_id")
+  entityType      String   @map("entity_type")
+  procedureType   String?  @map("procedure_type")
+  name            String
+  yamlContent     String   @map("yaml_content") @db.Text
+  isActive        Boolean  @default(true) @map("is_active")
+  version         Int      @default(1)
+  isTemplate      Boolean  @default(false) @map("is_template")
+  templateId      String?  @map("template_id")
+  templateVersion Int?     @map("template_version")
+  lockRule        Json?    @map("lock_rule") @db.JsonB
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  nodes       WorkflowNode[]
+  transitions WorkflowTransition[]
+  instances   WorkflowInstance[]
+
+  // Self-relation for template/override hierarchy
+  template  WorkflowDefinition?  @relation("TemplateOverrides", fields: [templateId], references: [id])
+  overrides WorkflowDefinition[] @relation("TemplateOverrides")
+
+  @@unique([entityType, procedureType, organisationId, version])
+  @@map("workflow_definitions")
+  @@schema("workflow")
+}
+
+enum NodeType {
+  START
+  ACTION
+  DECISION
+  LOOP
+  SYSTEM
+  END
+
+  @@schema("workflow")
+}
+
+model WorkflowNode {
+  id           String   @id @default(uuid())
+  definitionId String   @map("definition_id")
+  code         String
+  label        String
+  nodeType     NodeType @map("node_type")
+  isMandatory  Boolean  @default(false) @map("is_mandatory")
+  assigneeRole String?  @map("assignee_role")
+  slaHours     Int?     @map("sla_hours")
+  isLocked     Boolean  @default(false) @map("is_locked")
+  positionX    Int      @default(0) @map("position_x")
+  positionY    Int      @default(0) @map("position_y")
+  triggers     Json?    @db.JsonB
+  config       Json?    @db.JsonB
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  definition       WorkflowDefinition  @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+  transitionsFrom  WorkflowTransition[] @relation("FromNode")
+  transitionsTo    WorkflowTransition[] @relation("ToNode")
+  instancesCurrent WorkflowInstance[]   @relation("CurrentNode")
+  eventsFrom       WorkflowEvent[]      @relation("EventFromNode")
+  eventsTo         WorkflowEvent[]      @relation("EventToNode")
+
+  @@unique([definitionId, code])
+  @@map("workflow_nodes")
+  @@schema("workflow")
+}
+
+model WorkflowTransition {
+  id                 String  @id @default(uuid())
+  definitionId       String  @map("definition_id")
+  fromNodeId         String  @map("from_node_id")
+  toNodeId           String  @map("to_node_id")
+  action             String
+  label              String
+  guardExpression    Json?   @map("guard_expression") @db.JsonB
+  isMandatory        Boolean @default(false) @map("is_mandatory")
+  requiresComment    Boolean @default(false) @map("requires_comment")
+  requiresSignature  Boolean @default(false) @map("requires_signature")
+  requiresAttachment Boolean @default(false) @map("requires_attachment")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  definition WorkflowDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+  fromNode   WorkflowNode       @relation("FromNode", fields: [fromNodeId], references: [id], onDelete: Cascade)
+  toNode     WorkflowNode       @relation("ToNode", fields: [toNodeId], references: [id], onDelete: Cascade)
+  events     WorkflowEvent[]
+
+  @@map("workflow_transitions")
+  @@schema("workflow")
+}
+
+enum InstanceStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  SUSPENDED
+
+  @@schema("workflow")
+}
+
+model WorkflowInstance {
+  id             String         @id @default(uuid())
+  definitionId   String         @map("definition_id")
+  organisationId String?        @map("organisation_id")
+  entityType     String         @map("entity_type")
+  entityId       String         @map("entity_id")
+  currentNodeId  String?        @map("current_node_id")
+  status         InstanceStatus @default(ACTIVE)
+  loopCount      Int            @default(0) @map("loop_count")
+  context        Json?          @db.JsonB
+  startedAt      DateTime       @default(now()) @map("started_at")
+  completedAt    DateTime?      @map("completed_at")
+
+  definition  WorkflowDefinition @relation(fields: [definitionId], references: [id])
+  currentNode WorkflowNode?      @relation("CurrentNode", fields: [currentNodeId], references: [id])
+  events      WorkflowEvent[]
+
+  @@index([entityType, entityId])
+  @@map("workflow_instances")
+  @@schema("workflow")
+}
+
+model WorkflowEvent {
+  id           String   @id @default(uuid())
+  instanceId   String   @map("instance_id")
+  fromNodeId   String?  @map("from_node_id")
+  toNodeId     String?  @map("to_node_id")
+  transitionId String?  @map("transition_id")
+  action       String
+  actorId      String   @map("actor_id")
+  comment      String?  @db.Text
+  attachments  Json?    @db.JsonB
+  signatureId  String?  @map("signature_id")
+  timestamp    DateTime @default(now())
+  ipAddress    String?  @map("ip_address")
+
+  instance   WorkflowInstance    @relation(fields: [instanceId], references: [id])
+  fromNode   WorkflowNode?       @relation("EventFromNode", fields: [fromNodeId], references: [id])
+  toNode     WorkflowNode?       @relation("EventToNode", fields: [toNodeId], references: [id])
+  transition WorkflowTransition? @relation(fields: [transitionId], references: [id])
+
+  @@index([instanceId, timestamp])
+  @@map("workflow_events")
+  @@schema("workflow")
+}

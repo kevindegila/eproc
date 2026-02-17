@@ -1,0 +1,230 @@
+# ============================================================
+# wf-conciliation — Conciliation
+# Decret 2025-169, Art. 151-169
+# Procedure de conciliation amiable pour les litiges
+# d'execution des marches publics
+# ============================================================
+
+nodes:
+  - code: START
+    label: Demande de conciliation
+    type: START
+    mandatory: true
+
+  - code: SAISINE
+    label: Saisine du conciliateur
+    type: ACTION
+    assignee_role: OPERATEUR_ECONOMIQUE
+    mandatory: true
+    triggers:
+      notification: ARMP
+    config:
+      description: "Demande de conciliation aupres du comite de reglement amiable (Art. 151)"
+
+  - code: ENREGISTREMENT
+    label: Enregistrement de la demande
+    type: SYSTEM
+    mandatory: true
+    config:
+      auto_number: true
+
+  - code: ACCEPTATION_PARTIES
+    label: Acceptation de la conciliation par les parties
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 120
+    mandatory: true
+    triggers:
+      notification: ALL
+    config:
+      description: "Les deux parties doivent accepter la procedure de conciliation (Art. 152)"
+
+  - code: DECISION_ACCEPTATION
+    label: Les deux parties acceptent-elles ?
+    type: DECISION
+    mandatory: true
+
+  - code: DESIGNATION_CONCILIATEUR
+    label: Designation du conciliateur
+    type: ACTION
+    assignee_role: ARMP
+    sla_hours: 120
+    mandatory: true
+    config:
+      description: "Designation d'un conciliateur impartial (Art. 154)"
+
+  - code: REUNION_PRELIMINAIRE
+    label: Reunion preliminaire
+    type: ACTION
+    assignee_role: ARMP
+    sla_hours: 120
+    triggers:
+      notification: ALL
+    config:
+      description: "Premiere reunion pour fixer le cadre de la conciliation"
+
+  - code: ECHANGE_POSITIONS
+    label: Echange des positions
+    type: ACTION
+    assignee_role: ARMP
+    sla_hours: 240
+    mandatory: true
+    config:
+      description: "Chaque partie expose ses griefs et pretentions (Art. 158)"
+
+  - code: SEANCES_CONCILIATION
+    label: Seances de conciliation
+    type: LOOP
+    assignee_role: ARMP
+    sla_hours: 360
+    config:
+      description: "Seances de rapprochement des parties (Art. 160-165)"
+      max_seances: 5
+
+  - code: DECISION_ISSUE
+    label: Issue de la conciliation
+    type: DECISION
+    assignee_role: ARMP
+    mandatory: true
+    config:
+      question: "La conciliation a-t-elle abouti a un accord ?"
+
+  - code: REDACTION_ACCORD
+    label: Redaction du protocole d'accord
+    type: ACTION
+    assignee_role: ARMP
+    sla_hours: 120
+    mandatory: true
+    config:
+      description: "Redaction du protocole transactionnel (Art. 166)"
+
+  - code: SIGNATURE_ACCORD
+    label: Signature du protocole d'accord
+    type: ACTION
+    assignee_role: ARMP
+    sla_hours: 48
+    mandatory: true
+
+  - code: HOMOLOGATION
+    label: Homologation du protocole
+    type: ACTION
+    assignee_role: ARMP
+    sla_hours: 72
+    config:
+      description: "Homologation pour donner force executoire (Art. 168)"
+
+  - code: PV_ECHEC
+    label: Proces-verbal de non-conciliation
+    type: ACTION
+    assignee_role: ARMP
+    sla_hours: 48
+    config:
+      description: "PV constatant l'echec de la conciliation (Art. 167)"
+
+  - code: END_ACCORD
+    label: Conciliation reussie
+    type: END
+    mandatory: true
+
+  - code: END_ECHEC
+    label: Conciliation echouee
+    type: END
+    mandatory: true
+
+  - code: END_REFUSE
+    label: Conciliation refusee par une partie
+    type: END
+
+transitions:
+  - from: START
+    to: SAISINE
+    action: DEMARRER
+    label: Initier la conciliation
+
+  - from: SAISINE
+    to: ENREGISTREMENT
+    action: SAISIR
+    label: Deposer la demande
+    requires_attachment: true
+    requires_comment: true
+
+  - from: ENREGISTREMENT
+    to: ACCEPTATION_PARTIES
+    action: ENREGISTRER
+    label: Demande enregistree
+
+  - from: ACCEPTATION_PARTIES
+    to: DECISION_ACCEPTATION
+    action: REPONDRE
+    label: Reponses des parties recues
+
+  - from: DECISION_ACCEPTATION
+    to: DESIGNATION_CONCILIATEUR
+    action: ACCEPTER
+    label: Les deux parties acceptent
+
+  - from: DECISION_ACCEPTATION
+    to: END_REFUSE
+    action: REFUSER
+    label: Une ou les deux parties refusent
+    requires_comment: true
+
+  - from: DESIGNATION_CONCILIATEUR
+    to: REUNION_PRELIMINAIRE
+    action: DESIGNER
+    label: Conciliateur designe
+
+  - from: REUNION_PRELIMINAIRE
+    to: ECHANGE_POSITIONS
+    action: REUNIR
+    label: Reunion preliminaire tenue
+
+  - from: ECHANGE_POSITIONS
+    to: SEANCES_CONCILIATION
+    action: ECHANGER
+    label: Positions echangees
+    requires_attachment: true
+
+  - from: SEANCES_CONCILIATION
+    to: SEANCES_CONCILIATION
+    action: POURSUIVRE
+    label: Programmer une seance supplementaire
+
+  - from: SEANCES_CONCILIATION
+    to: DECISION_ISSUE
+    action: CONCLURE
+    label: Conclure les seances de conciliation
+
+  - from: DECISION_ISSUE
+    to: REDACTION_ACCORD
+    action: ACCORD
+    label: Accord trouve entre les parties
+
+  - from: DECISION_ISSUE
+    to: PV_ECHEC
+    action: ECHEC
+    label: Echec de la conciliation
+
+  - from: REDACTION_ACCORD
+    to: SIGNATURE_ACCORD
+    action: REDIGER
+    label: Protocole redige
+    requires_attachment: true
+
+  - from: SIGNATURE_ACCORD
+    to: HOMOLOGATION
+    action: SIGNER
+    label: Protocole signe par les parties
+    requires_signature: true
+
+  - from: HOMOLOGATION
+    to: END_ACCORD
+    action: HOMOLOGUER
+    label: Protocole homologue
+    requires_signature: true
+
+  - from: PV_ECHEC
+    to: END_ECHEC
+    action: CONSTATER
+    label: Echec constate
+    requires_signature: true

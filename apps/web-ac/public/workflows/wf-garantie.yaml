@@ -1,0 +1,251 @@
+# ============================================================
+# wf-garantie — Gestion des garanties
+# Decret 2025-169, Art. 125-129
+# Cycle de vie des garanties : soumission, bonne
+# execution, retenue de garantie, mainlevee
+# ============================================================
+
+nodes:
+  - code: START
+    label: Constitution de la garantie
+    type: START
+    mandatory: true
+
+  - code: DEPOT_GARANTIE
+    label: Depot de la garantie par le titulaire
+    type: ACTION
+    assignee_role: OPERATEUR_ECONOMIQUE
+    sla_hours: 240
+    mandatory: true
+    triggers:
+      notification: PPM
+    config:
+      description: "Depot de la caution bancaire ou garantie a premiere demande (Art. 125)"
+      types_garantie:
+        - GARANTIE_SOUMISSION
+        - GARANTIE_BONNE_EXECUTION
+        - RETENUE_GARANTIE
+        - CAUTION_AVANCE
+
+  - code: VERIFICATION_GARANTIE
+    label: Verification de la garantie
+    type: ACTION
+    assignee_role: AGENT_PPM
+    sla_hours: 72
+    mandatory: true
+    config:
+      checks:
+        - etablissement_agree
+        - montant_conforme
+        - duree_validite
+        - format_conforme
+
+  - code: DECISION_CONFORMITE
+    label: La garantie est-elle conforme ?
+    type: DECISION
+    assignee_role: AGENT_PPM
+    mandatory: true
+
+  - code: DEMANDE_REGULARISATION
+    label: Demande de regularisation
+    type: ACTION
+    assignee_role: AGENT_PPM
+    sla_hours: 48
+    triggers:
+      notification: OPERATEUR_ECONOMIQUE
+
+  - code: REGULARISATION
+    label: Regularisation par le titulaire
+    type: LOOP
+    assignee_role: OPERATEUR_ECONOMIQUE
+    sla_hours: 168
+
+  - code: ACCEPTATION
+    label: Acceptation de la garantie
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 24
+    mandatory: true
+
+  - code: SUIVI_VALIDITE
+    label: Suivi de la validite
+    type: SYSTEM
+    mandatory: true
+    config:
+      description: "Alerte automatique 30 jours avant expiration"
+      alert_before_expiry_days: 30
+
+  - code: RENOUVELLEMENT
+    label: Renouvellement de la garantie
+    type: ACTION
+    assignee_role: OPERATEUR_ECONOMIQUE
+    sla_hours: 240
+    triggers:
+      notification: OPERATEUR_ECONOMIQUE
+
+  - code: DEMANDE_MAINLEVEE
+    label: Demande de mainlevee
+    type: ACTION
+    assignee_role: OPERATEUR_ECONOMIQUE
+    sla_hours: 48
+    mandatory: true
+    triggers:
+      notification: PPM
+    config:
+      description: "Demande de liberation apres reception definitive (Art. 129)"
+
+  - code: VERIFICATION_CONDITIONS
+    label: Verification des conditions de mainlevee
+    type: ACTION
+    assignee_role: AGENT_PPM
+    sla_hours: 72
+    mandatory: true
+    config:
+      conditions:
+        - reception_definitive_prononcee
+        - aucune_penalite_en_cours
+        - aucun_litige_en_cours
+
+  - code: DECISION_MAINLEVEE
+    label: Decision de mainlevee
+    type: DECISION
+    assignee_role: PPM
+    mandatory: true
+
+  - code: APPEL_GARANTIE
+    label: Appel de la garantie (mise en jeu)
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 48
+    config:
+      description: "Mise en jeu de la garantie pour defaillance du titulaire (Art. 128)"
+
+  - code: EMISSION_MAINLEVEE
+    label: Emission de la mainlevee
+    type: SYSTEM
+    mandatory: true
+    triggers:
+      notification: OPERATEUR_ECONOMIQUE
+
+  - code: END_LIBEREE
+    label: Garantie liberee
+    type: END
+    mandatory: true
+
+  - code: END_APPELEE
+    label: Garantie appelee (mise en jeu)
+    type: END
+
+  - code: END_CADUCITE
+    label: Garantie caduque (non renouvelee)
+    type: END
+
+transitions:
+  - from: START
+    to: DEPOT_GARANTIE
+    action: DEMARRER
+    label: Initier le depot de garantie
+
+  - from: DEPOT_GARANTIE
+    to: VERIFICATION_GARANTIE
+    action: DEPOSER
+    label: Deposer la garantie
+    requires_attachment: true
+
+  - from: VERIFICATION_GARANTIE
+    to: DECISION_CONFORMITE
+    action: VERIFIER
+    label: Verification effectuee
+
+  - from: DECISION_CONFORMITE
+    to: ACCEPTATION
+    action: VALIDER
+    label: Garantie conforme
+
+  - from: DECISION_CONFORMITE
+    to: DEMANDE_REGULARISATION
+    action: DEMANDER_REGULARISATION
+    label: Garantie non conforme
+    requires_comment: true
+
+  - from: DEMANDE_REGULARISATION
+    to: REGULARISATION
+    action: NOTIFIER
+    label: Demande de regularisation envoyee
+
+  - from: REGULARISATION
+    to: VERIFICATION_GARANTIE
+    action: REGULARISER
+    label: Garantie regularisee
+    requires_attachment: true
+
+  - from: REGULARISATION
+    to: END_CADUCITE
+    action: EXPIRER
+    label: Delai de regularisation expire
+
+  - from: ACCEPTATION
+    to: SUIVI_VALIDITE
+    action: ACCEPTER
+    label: Garantie acceptee
+    requires_signature: true
+
+  - from: SUIVI_VALIDITE
+    to: RENOUVELLEMENT
+    action: ALERTER_EXPIRATION
+    label: Expiration imminente
+
+  - from: SUIVI_VALIDITE
+    to: DEMANDE_MAINLEVEE
+    action: DEMANDER_MAINLEVEE
+    label: Conditions de mainlevee reunies
+
+  - from: SUIVI_VALIDITE
+    to: APPEL_GARANTIE
+    action: APPELER
+    label: Mise en jeu de la garantie
+
+  - from: RENOUVELLEMENT
+    to: VERIFICATION_GARANTIE
+    action: RENOUVELER
+    label: Nouvelle garantie deposee
+    requires_attachment: true
+
+  - from: RENOUVELLEMENT
+    to: END_CADUCITE
+    action: EXPIRER
+    label: Non-renouvellement dans les delais
+
+  - from: DEMANDE_MAINLEVEE
+    to: VERIFICATION_CONDITIONS
+    action: DEMANDER
+    label: Soumettre la demande de mainlevee
+
+  - from: VERIFICATION_CONDITIONS
+    to: DECISION_MAINLEVEE
+    action: VERIFIER
+    label: Conditions verifiees
+
+  - from: DECISION_MAINLEVEE
+    to: EMISSION_MAINLEVEE
+    action: ACCORDER
+    label: Mainlevee accordee
+    requires_signature: true
+
+  - from: DECISION_MAINLEVEE
+    to: SUIVI_VALIDITE
+    action: REFUSER
+    label: Mainlevee refusee (conditions non reunies)
+    requires_comment: true
+
+  - from: APPEL_GARANTIE
+    to: END_APPELEE
+    action: METTRE_EN_JEU
+    label: Garantie mise en jeu
+    requires_signature: true
+    requires_comment: true
+
+  - from: EMISSION_MAINLEVEE
+    to: END_LIBEREE
+    action: LIBERER
+    label: Mainlevee emise, garantie liberee

@@ -1,0 +1,56 @@
+generator client {
+  provider        = "prisma-client-js"
+  output          = "../generated/prisma"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["submission"]
+}
+
+model Submission {
+  id              String   @id @default(uuid())
+  dacId           String   @map("dac_id")
+  dacReference    String   @map("dac_reference")
+  operatorId      String   @map("operator_id")
+  operatorName    String   @map("operator_name")
+  status          String   @default("BROUILLON")
+  submittedAt     DateTime? @map("submitted_at")
+  files           SubmissionFile[]
+  receipt         SubmissionReceipt?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("submissions")
+  @@schema("submission")
+}
+
+model SubmissionFile {
+  id            String     @id @default(uuid())
+  submissionId  String     @map("submission_id")
+  submission    Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  name          String
+  filePath      String     @map("file_path")
+  fileSize      Int        @map("file_size")
+  mimeType      String     @map("mime_type")
+  category      String     @default("TECHNIQUE")
+  createdAt     DateTime   @default(now()) @map("created_at")
+
+  @@map("submission_files")
+  @@schema("submission")
+}
+
+model SubmissionReceipt {
+  id            String     @id @default(uuid())
+  submissionId  String     @unique @map("submission_id")
+  submission    Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  receiptNumber String     @unique @map("receipt_number")
+  receivedAt    DateTime   @default(now()) @map("received_at")
+  receivedBy    String     @map("received_by")
+  createdAt     DateTime   @default(now()) @map("created_at")
+
+  @@map("submission_receipts")
+  @@schema("submission")
+}

@@ -1,0 +1,232 @@
+# ============================================================
+# wf-dac — DAC elaboration & validation
+# Decret 2025-169, Art. 66-69
+# Workflow de creation, validation et publication d'un
+# Dossier d'Appel a Concurrence (DAC)
+# ============================================================
+
+nodes:
+  # --- Debut ---
+  - code: START
+    label: Initiation du DAC
+    type: START
+    mandatory: true
+
+  # --- Redaction ---
+  - code: REDACTION_DAO
+    label: Redaction du dossier d'appel d'offres
+    type: ACTION
+    assignee_role: AGENT_PPM
+    sla_hours: 120
+    mandatory: true
+    triggers:
+      notification: ASSIGNEE
+    config:
+      description: "Elaboration du cahier des charges, specifications techniques, criteres d'evaluation"
+
+  - code: REVISION_DAO
+    label: Revision du DAO apres rejet
+    type: LOOP
+    assignee_role: AGENT_PPM
+    sla_hours: 72
+    triggers:
+      notification: ASSIGNEE
+
+  # --- Validation interne PPM ---
+  - code: VALIDATION_PPM
+    label: Validation par le PPM
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 48
+    mandatory: true
+    triggers:
+      notification: ASSIGNEE
+
+  # --- Examen de conformite ---
+  - code: DECISION_CONFORMITE
+    label: Decision de conformite
+    type: DECISION
+    assignee_role: PPM
+    mandatory: true
+    config:
+      question: "Le DAO est-il conforme aux exigences reglementaires ?"
+
+  # --- Avis de non-objection DNCMP pour gros marches ---
+  - code: SOUMISSION_DNCMP
+    label: Soumission a la DNCMP pour avis
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 24
+    triggers:
+      notification: DNCMP
+    config:
+      description: "Transmission du dossier a la DNCMP pour avis de non-objection (Art. 67)"
+
+  - code: EXAMEN_DNCMP
+    label: Examen par la DNCMP
+    type: ACTION
+    assignee_role: DNCMP
+    sla_hours: 168
+    mandatory: true
+    triggers:
+      notification: ASSIGNEE
+      sla_warning_hours: 24
+    config:
+      description: "Examen de conformite et avis de non-objection (Art. 67-68)"
+
+  - code: DECISION_DNCMP
+    label: Decision DNCMP
+    type: DECISION
+    assignee_role: DNCMP
+    mandatory: true
+
+  # --- Approbation autorite contractante ---
+  - code: APPROBATION_AC
+    label: Approbation par l'autorite contractante
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 48
+    mandatory: true
+    triggers:
+      notification: ASSIGNEE
+
+  # --- Publication ---
+  - code: PUBLICATION
+    label: Publication de l'avis d'appel d'offres
+    type: SYSTEM
+    mandatory: true
+    sla_hours: 24
+    triggers:
+      notification: ALL
+      cascade_workflow: wf-soumission
+    config:
+      description: "Publication sur le portail national et JORT (Art. 69)"
+      auto_publish: true
+      channels:
+        - PORTAIL_NATIONAL
+        - JORT
+        - JOURNAL_LARGE_DIFFUSION
+
+  # --- Fin ---
+  - code: END
+    label: DAC publie
+    type: END
+    mandatory: true
+
+  - code: END_ANNULE
+    label: DAC annule
+    type: END
+
+transitions:
+  # Demarrage
+  - from: START
+    to: REDACTION_DAO
+    action: DEMARRER
+    label: Demarrer l'elaboration du DAC
+    mandatory: true
+
+  # Soumission pour validation
+  - from: REDACTION_DAO
+    to: VALIDATION_PPM
+    action: SOUMETTRE
+    label: Soumettre pour validation PPM
+    requires_comment: false
+    requires_attachment: true
+
+  # Revision apres rejet -> re-soumission
+  - from: REVISION_DAO
+    to: VALIDATION_PPM
+    action: RESOUMETTRE
+    label: Resoumettre apres revision
+    requires_comment: true
+    requires_attachment: true
+
+  # Validation PPM -> decision
+  - from: VALIDATION_PPM
+    to: DECISION_CONFORMITE
+    action: EXAMINER
+    label: Examiner la conformite
+
+  # Conforme -> DNCMP (si seuil depasse)
+  - from: DECISION_CONFORMITE
+    to: SOUMISSION_DNCMP
+    action: VALIDER_VERS_DNCMP
+    label: Valider et transmettre a la DNCMP
+    guard:
+      field: montant
+      operator: gte
+      value: 100000000
+    requires_signature: true
+
+  # Conforme -> approbation directe (sous seuil)
+  - from: DECISION_CONFORMITE
+    to: APPROBATION_AC
+    action: VALIDER_DIRECT
+    label: Valider directement (sous seuil DNCMP)
+    guard:
+      field: montant
+      operator: lt
+      value: 100000000
+    requires_signature: true
+
+  # Non conforme -> retour
+  - from: DECISION_CONFORMITE
+    to: REVISION_DAO
+    action: REJETER
+    label: Rejeter pour revision
+    requires_comment: true
+
+  # Soumission DNCMP
+  - from: SOUMISSION_DNCMP
+    to: EXAMEN_DNCMP
+    action: TRANSMETTRE
+    label: Transmettre le dossier
+
+  # Decision DNCMP
+  - from: EXAMEN_DNCMP
+    to: DECISION_DNCMP
+    action: STATUER
+    label: Rendre l'avis
+
+  # DNCMP approuve
+  - from: DECISION_DNCMP
+    to: APPROBATION_AC
+    action: APPROUVER
+    label: Emettre un avis favorable
+    requires_signature: true
+    requires_comment: true
+
+  # DNCMP rejette -> retour
+  - from: DECISION_DNCMP
+    to: REVISION_DAO
+    action: REJETER
+    label: Emettre un avis defavorable
+    requires_comment: true
+
+  # Approbation AC
+  - from: APPROBATION_AC
+    to: PUBLICATION
+    action: APPROUVER
+    label: Approuver et lancer la publication
+    requires_signature: true
+
+  # Publication -> fin
+  - from: PUBLICATION
+    to: END
+    action: PUBLIER
+    label: DAC publie avec succes
+
+  # Annulation a tout moment (depuis validation PPM)
+  - from: VALIDATION_PPM
+    to: END_ANNULE
+    action: ANNULER
+    label: Annuler le DAC
+    requires_comment: true
+    requires_signature: true
+
+  - from: APPROBATION_AC
+    to: END_ANNULE
+    action: ANNULER
+    label: Annuler le DAC
+    requires_comment: true
+    requires_signature: true

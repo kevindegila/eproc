@@ -1,0 +1,94 @@
+generator client {
+  provider        = "prisma-client-js"
+  output          = "../generated/prisma"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["payment"]
+}
+
+model PaymentRequest {
+  id              String   @id @default(uuid())
+  reference       String   @unique
+  contractId      String   @map("contract_id")
+  contractReference String @map("contract_reference")
+  amount          Float
+  description     String
+  status          String   @default("BROUILLON")
+  submittedAt     DateTime? @map("submitted_at")
+  validatedAt     DateTime? @map("validated_at")
+  paidAt          DateTime? @map("paid_at")
+  invoices        Invoice[]
+  payments        Payment[]
+  createdBy       String   @map("created_by")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("payment_requests")
+  @@schema("payment")
+}
+
+model Invoice {
+  id              String         @id @default(uuid())
+  requestId       String         @map("request_id")
+  request         PaymentRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  invoiceNumber   String         @unique @map("invoice_number")
+  amount          Float
+  invoiceDate     DateTime       @map("invoice_date")
+  description     String?
+  createdAt       DateTime       @default(now()) @map("created_at")
+
+  @@map("invoices")
+  @@schema("payment")
+}
+
+model Payment {
+  id              String         @id @default(uuid())
+  requestId       String         @map("request_id")
+  request         PaymentRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  amount          Float
+  paymentDate     DateTime       @map("payment_date")
+  paymentMethod   String         @map("payment_method")
+  transactionRef  String?        @map("transaction_ref")
+  observations    String?
+  createdAt       DateTime       @default(now()) @map("created_at")
+
+  @@map("payments")
+  @@schema("payment")
+}
+
+model Penalty {
+  id              String   @id @default(uuid())
+  contractId      String   @map("contract_id")
+  contractReference String @map("contract_reference")
+  type            String
+  amount          Float
+  reason          String
+  appliedDate     DateTime @map("applied_date")
+  createdBy       String   @map("created_by")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@map("penalties")
+  @@schema("payment")
+}
+
+model Guarantee {
+  id              String    @id @default(uuid())
+  contractId      String    @map("contract_id")
+  contractReference String  @map("contract_reference")
+  type            String
+  amount          Float
+  issuer          String
+  issueDate       DateTime  @map("issue_date")
+  expiryDate      DateTime  @map("expiry_date")
+  status          String    @default("ACTIVE")
+  releasedAt      DateTime? @map("released_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@map("guarantees")
+  @@schema("payment")
+}

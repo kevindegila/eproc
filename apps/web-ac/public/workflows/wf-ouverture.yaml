@@ -1,0 +1,188 @@
+# ============================================================
+# wf-ouverture — Ouverture des plis
+# Decret 2025-169, Art. 84-88
+# Seance publique d'ouverture des plis et
+# verification de conformite administrative
+# ============================================================
+
+nodes:
+  - code: START
+    label: Declenchement ouverture des plis
+    type: START
+    mandatory: true
+
+  - code: CONVOCATION
+    label: Convocation des membres de la commission
+    type: SYSTEM
+    mandatory: true
+    sla_hours: 48
+    triggers:
+      notification: MEMBRES_COMMISSION
+    config:
+      description: "Convocation de la commission d'ouverture et des soumissionnaires (Art. 84)"
+      notify:
+        - MEMBRES_COMMISSION
+        - SOUMISSIONNAIRES
+        - OBSERVATEURS
+
+  - code: CONSTITUTION_COMMISSION
+    label: Constitution de la commission d'ouverture
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 24
+    mandatory: true
+    config:
+      quorum_minimum: 3
+      roles_requis:
+        - PRESIDENT_COMMISSION
+        - RAPPORTEUR
+        - MEMBRE
+
+  - code: VERIFICATION_QUORUM
+    label: Verification du quorum
+    type: DECISION
+    assignee_role: PPM
+    mandatory: true
+    config:
+      question: "Le quorum est-il atteint pour la seance d'ouverture ?"
+
+  - code: OUVERTURE_PLIS_ADMIN
+    label: Ouverture des plis administratifs
+    type: ACTION
+    assignee_role: MEMBRE_COMMISSION
+    mandatory: true
+    triggers:
+      notification: ALL
+    config:
+      description: "Ouverture des enveloppes administratives en seance publique (Art. 85)"
+      public_session: true
+
+  - code: VERIFICATION_ADMIN
+    label: Verification de conformite administrative
+    type: ACTION
+    assignee_role: MEMBRE_COMMISSION
+    sla_hours: 4
+    mandatory: true
+    config:
+      checks:
+        - pieces_administratives
+        - garantie_soumission
+        - pouvoir_signature
+        - validite_documents
+
+  - code: OUVERTURE_PLIS_TECHNIQUES
+    label: Ouverture des plis techniques
+    type: ACTION
+    assignee_role: MEMBRE_COMMISSION
+    mandatory: true
+    config:
+      description: "Ouverture des offres techniques (Art. 86)"
+
+  - code: LECTURE_MONTANTS
+    label: Lecture publique des montants
+    type: ACTION
+    assignee_role: MEMBRE_COMMISSION
+    mandatory: true
+    config:
+      description: "Lecture a haute voix des montants (offre financiere - Art. 87)"
+      public_reading: true
+
+  - code: REDACTION_PV
+    label: Redaction du proces-verbal d'ouverture
+    type: ACTION
+    assignee_role: MEMBRE_COMMISSION
+    sla_hours: 24
+    mandatory: true
+    config:
+      description: "PV d'ouverture signe par tous les membres (Art. 88)"
+
+  - code: SIGNATURE_PV
+    label: Signature du PV par la commission
+    type: ACTION
+    assignee_role: MEMBRE_COMMISSION
+    sla_hours: 4
+    mandatory: true
+    triggers:
+      notification: MEMBRES_COMMISSION
+
+  - code: TRANSMISSION_EVALUATION
+    label: Transmission pour evaluation
+    type: SYSTEM
+    mandatory: true
+    triggers:
+      cascade_workflow: wf-evaluation
+    config:
+      description: "Transmission des offres conformes a la sous-commission d'evaluation"
+
+  - code: END
+    label: Ouverture terminee
+    type: END
+    mandatory: true
+
+  - code: END_AJOURNE
+    label: Seance ajournee (quorum non atteint)
+    type: END
+
+transitions:
+  - from: START
+    to: CONVOCATION
+    action: DEMARRER
+    label: Demarrer le processus d'ouverture
+
+  - from: CONVOCATION
+    to: CONSTITUTION_COMMISSION
+    action: CONVOQUER
+    label: Envoyer les convocations
+
+  - from: CONSTITUTION_COMMISSION
+    to: VERIFICATION_QUORUM
+    action: CONSTITUER
+    label: Verifier la constitution
+
+  - from: VERIFICATION_QUORUM
+    to: OUVERTURE_PLIS_ADMIN
+    action: CONFIRMER_QUORUM
+    label: Quorum atteint, demarrer l'ouverture
+
+  - from: VERIFICATION_QUORUM
+    to: END_AJOURNE
+    action: AJOURNER
+    label: Reporter la seance (quorum non atteint)
+    requires_comment: true
+
+  - from: OUVERTURE_PLIS_ADMIN
+    to: VERIFICATION_ADMIN
+    action: OUVRIR
+    label: Proceder a l'ouverture administrative
+
+  - from: VERIFICATION_ADMIN
+    to: OUVERTURE_PLIS_TECHNIQUES
+    action: VALIDER
+    label: Conformite administrative validee
+
+  - from: OUVERTURE_PLIS_TECHNIQUES
+    to: LECTURE_MONTANTS
+    action: OUVRIR_TECHNIQUE
+    label: Proceder a l'ouverture technique
+
+  - from: LECTURE_MONTANTS
+    to: REDACTION_PV
+    action: LIRE
+    label: Lecture des montants effectuee
+
+  - from: REDACTION_PV
+    to: SIGNATURE_PV
+    action: REDIGER
+    label: Soumettre le PV pour signature
+    requires_attachment: true
+
+  - from: SIGNATURE_PV
+    to: TRANSMISSION_EVALUATION
+    action: SIGNER
+    label: PV signe par tous les membres
+    requires_signature: true
+
+  - from: TRANSMISSION_EVALUATION
+    to: END
+    action: TRANSMETTRE
+    label: Dossiers transmis pour evaluation

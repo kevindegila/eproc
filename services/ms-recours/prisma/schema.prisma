@@ -1,0 +1,85 @@
+generator client {
+  provider        = "prisma-client-js"
+  output          = "../generated/prisma"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["recours"]
+}
+
+model Appeal {
+  id              String   @id @default(uuid())
+  reference       String   @unique
+  type            String
+  dacId           String?  @map("dac_id")
+  dacReference    String?  @map("dac_reference")
+  complainantId   String   @map("complainant_id")
+  complainantName String   @map("complainant_name")
+  respondentName  String   @map("respondent_name")
+  subject         String
+  description     String
+  status          String   @default("DEPOSE")
+  filedAt         DateTime @default(now()) @map("filed_at")
+  decisions       AppealDecision[]
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("appeals")
+  @@schema("recours")
+}
+
+model AppealDecision {
+  id            String   @id @default(uuid())
+  appealId      String   @map("appeal_id")
+  appeal        Appeal   @relation(fields: [appealId], references: [id], onDelete: Cascade)
+  decisionDate  DateTime @map("decision_date")
+  decisionType  String   @map("decision_type")
+  summary       String
+  isInFavor     Boolean  @map("is_in_favor")
+  decidedBy     String   @map("decided_by")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@map("appeal_decisions")
+  @@schema("recours")
+}
+
+model Arbitration {
+  id              String   @id @default(uuid())
+  reference       String   @unique
+  appealId        String?  @map("appeal_id")
+  parties         String[]
+  subject         String
+  description     String
+  arbitrator      String
+  status          String   @default("EN_COURS")
+  hearingDate     DateTime? @map("hearing_date")
+  decisionDate    DateTime? @map("decision_date")
+  decision        String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("arbitrations")
+  @@schema("recours")
+}
+
+model Denunciation {
+  id              String   @id @default(uuid())
+  reference       String   @unique
+  subject         String
+  description     String
+  category        String
+  isAnonymous     Boolean  @default(true) @map("is_anonymous")
+  contactEmail    String?  @map("contact_email")
+  status          String   @default("RECUE")
+  receivedAt      DateTime @default(now()) @map("received_at")
+  processedAt     DateTime? @map("processed_at")
+  response        String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("denunciations")
+  @@schema("recours")
+}

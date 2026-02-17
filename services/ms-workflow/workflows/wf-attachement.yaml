@@ -1,0 +1,176 @@
+# ============================================================
+# wf-attachement — Attachements & decomptes
+# Decret 2025-169, Art. 107
+# Processus de constatation des travaux, etablissement
+# des attachements et decomptes provisoires/definitifs
+# ============================================================
+
+nodes:
+  - code: START
+    label: Initiation de l'attachement
+    type: START
+    mandatory: true
+
+  - code: CONSTATATION_TERRAIN
+    label: Constatation contradictoire sur le terrain
+    type: ACTION
+    assignee_role: AGENT_PPM
+    sla_hours: 72
+    mandatory: true
+    triggers:
+      notification: ASSIGNEE
+    config:
+      description: "Constatation contradictoire des travaux executes (Art. 107)"
+      requires_field_visit: true
+
+  - code: REDACTION_ATTACHEMENT
+    label: Redaction de l'attachement
+    type: ACTION
+    assignee_role: AGENT_PPM
+    sla_hours: 48
+    mandatory: true
+
+  - code: SIGNATURE_CONTRADICTOIRE
+    label: Signature contradictoire
+    type: ACTION
+    assignee_role: OPERATEUR_ECONOMIQUE
+    sla_hours: 48
+    mandatory: true
+    config:
+      description: "Signature par l'entrepreneur et le maitre d'oeuvre"
+
+  - code: DECISION_CONTESTATION
+    label: L'entrepreneur conteste-t-il ?
+    type: DECISION
+    mandatory: true
+
+  - code: TRAITEMENT_CONTESTATION
+    label: Traitement de la contestation
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 120
+    triggers:
+      notification: ASSIGNEE
+
+  - code: ETABLISSEMENT_DECOMPTE
+    label: Etablissement du decompte
+    type: ACTION
+    assignee_role: AGENT_PPM
+    sla_hours: 72
+    mandatory: true
+    config:
+      types:
+        - DECOMPTE_PROVISOIRE
+        - DECOMPTE_PARTIEL_DEFINITIF
+        - DECOMPTE_GENERAL_DEFINITIF
+
+  - code: VERIFICATION_DECOMPTE
+    label: Verification du decompte
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 48
+    mandatory: true
+    triggers:
+      notification: ASSIGNEE
+
+  - code: REVISION_DECOMPTE
+    label: Revision du decompte
+    type: LOOP
+    assignee_role: AGENT_PPM
+    sla_hours: 48
+
+  - code: APPROBATION_DECOMPTE
+    label: Approbation du decompte
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 48
+    mandatory: true
+
+  - code: TRANSMISSION_PAIEMENT
+    label: Transmission pour paiement
+    type: SYSTEM
+    mandatory: true
+    triggers:
+      notification: PPM
+      cascade_workflow: wf-facture
+    config:
+      description: "Transmission du decompte approuve au service financier"
+
+  - code: END
+    label: Decompte approuve et transmis
+    type: END
+    mandatory: true
+
+transitions:
+  - from: START
+    to: CONSTATATION_TERRAIN
+    action: DEMARRER
+    label: Demarrer la constatation
+
+  - from: CONSTATATION_TERRAIN
+    to: REDACTION_ATTACHEMENT
+    action: CONSTATER
+    label: Constatation effectuee
+    requires_attachment: true
+
+  - from: REDACTION_ATTACHEMENT
+    to: SIGNATURE_CONTRADICTOIRE
+    action: SOUMETTRE
+    label: Soumettre pour signature contradictoire
+    requires_attachment: true
+
+  - from: SIGNATURE_CONTRADICTOIRE
+    to: DECISION_CONTESTATION
+    action: SIGNER
+    label: Signature effectuee
+    requires_signature: true
+
+  - from: DECISION_CONTESTATION
+    to: ETABLISSEMENT_DECOMPTE
+    action: ACCEPTER
+    label: Attachement accepte sans contestation
+
+  - from: DECISION_CONTESTATION
+    to: TRAITEMENT_CONTESTATION
+    action: CONTESTER
+    label: Contestation de l'attachement
+    requires_comment: true
+
+  - from: TRAITEMENT_CONTESTATION
+    to: ETABLISSEMENT_DECOMPTE
+    action: RESOUDRE
+    label: Contestation resolue
+    requires_comment: true
+
+  - from: ETABLISSEMENT_DECOMPTE
+    to: VERIFICATION_DECOMPTE
+    action: ETABLIR
+    label: Decompte etabli
+    requires_attachment: true
+
+  - from: VERIFICATION_DECOMPTE
+    to: APPROBATION_DECOMPTE
+    action: VALIDER
+    label: Decompte verifie conforme
+
+  - from: VERIFICATION_DECOMPTE
+    to: REVISION_DECOMPTE
+    action: REJETER
+    label: Decompte a reviser
+    requires_comment: true
+
+  - from: REVISION_DECOMPTE
+    to: VERIFICATION_DECOMPTE
+    action: RESOUMETTRE
+    label: Resoumettre le decompte corrige
+
+  - from: APPROBATION_DECOMPTE
+    to: TRANSMISSION_PAIEMENT
+    action: APPROUVER
+    label: Approuver et transmettre pour paiement
+    requires_signature: true
+
+  - from: TRANSMISSION_PAIEMENT
+    to: END
+    action: TRANSMETTRE
+    label: Decompte transmis au service financier

@@ -1,0 +1,254 @@
+# ============================================================
+# wf-contrat — Elaboration & approbation du contrat
+# Decret 2025-169, Art. 94-98
+# Redaction, negociation, signature et approbation
+# du marche public
+# ============================================================
+
+nodes:
+  - code: START
+    label: Lancement de l'elaboration du contrat
+    type: START
+    mandatory: true
+
+  - code: REDACTION_CONTRAT
+    label: Redaction du projet de contrat
+    type: ACTION
+    assignee_role: AGENT_PPM
+    sla_hours: 120
+    mandatory: true
+    triggers:
+      notification: ASSIGNEE
+    config:
+      description: "Redaction du contrat sur la base du DAO et de l'offre retenue (Art. 94)"
+
+  - code: REVISION_CONTRAT
+    label: Revision du contrat
+    type: LOOP
+    assignee_role: AGENT_PPM
+    sla_hours: 72
+
+  - code: NEGOCIATION
+    label: Negociation avec l'attributaire
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 120
+    config:
+      description: "Negociation des clauses non substantielles avec le titulaire (Art. 95)"
+      cross_workflow: wf-evaluation
+
+  - code: VALIDATION_JURIDIQUE
+    label: Validation juridique
+    type: ACTION
+    assignee_role: AGENT_PPM
+    sla_hours: 72
+    mandatory: true
+    triggers:
+      notification: ASSIGNEE
+
+  - code: VALIDATION_PPM
+    label: Validation par le PPM
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 48
+    mandatory: true
+    triggers:
+      notification: ASSIGNEE
+
+  - code: DECISION_SEUIL
+    label: Verification du seuil d'approbation
+    type: DECISION
+    assignee_role: PPM
+    mandatory: true
+
+  - code: APPROBATION_DNCMP
+    label: Approbation par la DNCMP
+    type: ACTION
+    assignee_role: DNCMP
+    sla_hours: 168
+    mandatory: true
+    triggers:
+      notification: ASSIGNEE
+    config:
+      description: "Approbation pour les marches au-dessus du seuil (Art. 96)"
+
+  - code: DECISION_DNCMP
+    label: Decision DNCMP
+    type: DECISION
+    assignee_role: DNCMP
+    mandatory: true
+
+  - code: SIGNATURE_AC
+    label: Signature par l'autorite contractante
+    type: ACTION
+    assignee_role: PPM
+    sla_hours: 48
+    mandatory: true
+    triggers:
+      notification: ASSIGNEE
+
+  - code: SIGNATURE_TITULAIRE
+    label: Signature par le titulaire
+    type: ACTION
+    assignee_role: OPERATEUR_ECONOMIQUE
+    sla_hours: 120
+    mandatory: true
+    triggers:
+      notification: ASSIGNEE
+    config:
+      description: "Signature electronique du contrat par le titulaire (Art. 97)"
+
+  - code: ENREGISTREMENT
+    label: Enregistrement du contrat
+    type: SYSTEM
+    mandatory: true
+    config:
+      description: "Attribution d'un numero de marche, enregistrement officiel (Art. 98)"
+      auto_number: true
+
+  - code: NOTIFICATION_TITULAIRE
+    label: Notification au titulaire
+    type: SYSTEM
+    mandatory: true
+    triggers:
+      notification: OPERATEUR_ECONOMIQUE
+      cascade_workflow: wf-ordre-service
+    config:
+      description: "Notification officielle et demarrage du delai d'execution"
+
+  - code: PUBLICATION_ATTRIBUTION
+    label: Publication de l'attribution definitive
+    type: SYSTEM
+    mandatory: true
+    triggers:
+      notification: ALL
+    config:
+      channels:
+        - PORTAIL_NATIONAL
+        - JORT
+
+  - code: END
+    label: Contrat signe et enregistre
+    type: END
+    mandatory: true
+
+  - code: END_ECHEC_NEGOCIATION
+    label: Echec de la negociation
+    type: END
+
+transitions:
+  - from: START
+    to: REDACTION_CONTRAT
+    action: DEMARRER
+    label: Demarrer l'elaboration du contrat
+
+  - from: REDACTION_CONTRAT
+    to: NEGOCIATION
+    action: SOUMETTRE
+    label: Soumettre pour negociation
+    requires_attachment: true
+
+  - from: NEGOCIATION
+    to: VALIDATION_JURIDIQUE
+    action: CONCLURE
+    label: Negociation conclue
+    requires_comment: true
+
+  - from: NEGOCIATION
+    to: END_ECHEC_NEGOCIATION
+    action: ECHOUER
+    label: Echec de la negociation
+    requires_comment: true
+    requires_signature: true
+
+  - from: VALIDATION_JURIDIQUE
+    to: VALIDATION_PPM
+    action: VALIDER
+    label: Validation juridique conforme
+
+  - from: VALIDATION_JURIDIQUE
+    to: REVISION_CONTRAT
+    action: REJETER
+    label: Non-conformite juridique
+    requires_comment: true
+
+  - from: REVISION_CONTRAT
+    to: VALIDATION_JURIDIQUE
+    action: RESOUMETTRE
+    label: Resoumettre apres revision
+    requires_comment: true
+
+  - from: VALIDATION_PPM
+    to: DECISION_SEUIL
+    action: VALIDER
+    label: PPM valide le contrat
+
+  - from: VALIDATION_PPM
+    to: REVISION_CONTRAT
+    action: REJETER
+    label: PPM demande une revision
+    requires_comment: true
+
+  # Sous seuil -> signature directe
+  - from: DECISION_SEUIL
+    to: SIGNATURE_AC
+    action: SIGNER_DIRECT
+    label: Sous seuil, signature directe
+    guard:
+      field: montant
+      operator: lt
+      value: 100000000
+
+  # Au-dessus du seuil -> DNCMP
+  - from: DECISION_SEUIL
+    to: APPROBATION_DNCMP
+    action: TRANSMETTRE_DNCMP
+    label: Transmettre a la DNCMP
+    guard:
+      field: montant
+      operator: gte
+      value: 100000000
+
+  - from: APPROBATION_DNCMP
+    to: DECISION_DNCMP
+    action: STATUER
+    label: DNCMP rend sa decision
+
+  - from: DECISION_DNCMP
+    to: SIGNATURE_AC
+    action: APPROUVER
+    label: Contrat approuve par la DNCMP
+    requires_signature: true
+
+  - from: DECISION_DNCMP
+    to: REVISION_CONTRAT
+    action: REJETER
+    label: DNCMP demande des modifications
+    requires_comment: true
+
+  - from: SIGNATURE_AC
+    to: SIGNATURE_TITULAIRE
+    action: SIGNER
+    label: Autorite contractante signe
+    requires_signature: true
+
+  - from: SIGNATURE_TITULAIRE
+    to: ENREGISTREMENT
+    action: SIGNER
+    label: Titulaire signe le contrat
+    requires_signature: true
+
+  - from: ENREGISTREMENT
+    to: NOTIFICATION_TITULAIRE
+    action: ENREGISTRER
+    label: Contrat enregistre
+
+  - from: NOTIFICATION_TITULAIRE
+    to: PUBLICATION_ATTRIBUTION
+    action: NOTIFIER
+    label: Titulaire notifie
+
+  - from: PUBLICATION_ATTRIBUTION
+    to: END
+    action: PUBLIER
+    label: Attribution publiee

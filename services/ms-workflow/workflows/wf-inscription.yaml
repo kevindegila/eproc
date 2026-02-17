@@ -1,0 +1,259 @@
+# ============================================================
+# wf-inscription — Inscription des utilisateurs
+# Decret 2025-169, Art. 10-16
+# Processus d'inscription et de validation des
+# differents acteurs sur la plateforme e-procurement
+# ============================================================
+
+nodes:
+  - code: START
+    label: Demande d'inscription
+    type: START
+    mandatory: true
+
+  - code: SAISIE_FORMULAIRE
+    label: Remplissage du formulaire d'inscription
+    type: ACTION
+    assignee_role: PUBLIC
+    mandatory: true
+    config:
+      description: "Saisie des informations d'identification et upload des documents (Art. 10)"
+      champs_requis:
+        - identite
+        - contact
+        - organisation
+        - documents_justificatifs
+      types_comptes:
+        - AUTORITE_CONTRACTANTE
+        - OPERATEUR_ECONOMIQUE
+        - OBSERVATEUR
+
+  - code: VERIFICATION_AUTOMATIQUE
+    label: Verification automatique des donnees
+    type: SYSTEM
+    mandatory: true
+    config:
+      checks:
+        - email_unique
+        - nif_valide
+        - rccm_valide
+        - documents_complets
+        - format_fichiers
+
+  - code: DECISION_VERIFICATION_AUTO
+    label: Resultat verification automatique
+    type: DECISION
+    mandatory: true
+
+  - code: DEMANDE_COMPLEMENT
+    label: Demande de complement d'information
+    type: ACTION
+    assignee_role: AGENT_DGCMP
+    sla_hours: 48
+    triggers:
+      notification: PUBLIC
+
+  - code: COMPLEMENT_INFO
+    label: Complement d'information par le demandeur
+    type: LOOP
+    assignee_role: PUBLIC
+    sla_hours: 240
+    config:
+      description: "Le demandeur dispose de 10 jours pour completer son dossier"
+
+  - code: VALIDATION_DOCUMENTS
+    label: Validation manuelle des documents
+    type: ACTION
+    assignee_role: AGENT_DGCMP
+    sla_hours: 120
+    mandatory: true
+    triggers:
+      notification: ASSIGNEE
+    config:
+      description: "Verification de l'authenticite des documents (Art. 12)"
+
+  - code: DECISION_VALIDATION
+    label: Decision de validation
+    type: DECISION
+    assignee_role: AGENT_DGCMP
+    mandatory: true
+
+  - code: VERIFICATION_ANTECEDENTS
+    label: Verification des antecedents
+    type: ACTION
+    assignee_role: AGENT_DGCMP
+    sla_hours: 168
+    config:
+      description: "Verification des antecedents pour les operateurs economiques (Art. 13)"
+      checks:
+        - casier_judiciaire
+        - situation_fiscale
+        - cotisations_sociales
+        - exclusions_precedentes
+
+  - code: DECISION_ANTECEDENTS
+    label: Resultat des verifications
+    type: DECISION
+    assignee_role: AGENT_DGCMP
+
+  - code: APPROBATION_DGCMP
+    label: Approbation par la DGCMP
+    type: ACTION
+    assignee_role: DGCMP
+    sla_hours: 48
+    mandatory: true
+    triggers:
+      notification: ASSIGNEE
+    config:
+      description: "Approbation finale de l'inscription (Art. 14)"
+
+  - code: CREATION_COMPTE
+    label: Creation du compte utilisateur
+    type: SYSTEM
+    mandatory: true
+    config:
+      description: "Activation du compte, generation des identifiants (Art. 15)"
+      auto_create: true
+      generate_credentials: true
+
+  - code: NOTIFICATION_ACTIVATION
+    label: Notification d'activation du compte
+    type: SYSTEM
+    mandatory: true
+    triggers:
+      notification: PUBLIC
+    config:
+      description: "Envoi des identifiants et guide d'utilisation (Art. 16)"
+      channels:
+        - EMAIL
+        - SMS
+
+  - code: END_ACTIVE
+    label: Compte active
+    type: END
+    mandatory: true
+
+  - code: END_REJETE
+    label: Inscription rejetee
+    type: END
+
+  - code: END_ABANDONNE
+    label: Inscription abandonnee (delai depasse)
+    type: END
+
+transitions:
+  - from: START
+    to: SAISIE_FORMULAIRE
+    action: DEMARRER
+    label: Commencer l'inscription
+
+  - from: SAISIE_FORMULAIRE
+    to: VERIFICATION_AUTOMATIQUE
+    action: SOUMETTRE
+    label: Soumettre le formulaire
+    requires_attachment: true
+
+  - from: VERIFICATION_AUTOMATIQUE
+    to: DECISION_VERIFICATION_AUTO
+    action: VERIFIER
+    label: Verification automatique effectuee
+
+  - from: DECISION_VERIFICATION_AUTO
+    to: VALIDATION_DOCUMENTS
+    action: CONFORME
+    label: Donnees conformes, passer a la validation manuelle
+
+  - from: DECISION_VERIFICATION_AUTO
+    to: DEMANDE_COMPLEMENT
+    action: INCOMPLET
+    label: Dossier incomplet
+
+  - from: DEMANDE_COMPLEMENT
+    to: COMPLEMENT_INFO
+    action: DEMANDER
+    label: Demande de complement envoyee
+
+  - from: COMPLEMENT_INFO
+    to: VERIFICATION_AUTOMATIQUE
+    action: COMPLETER
+    label: Complement fourni
+    requires_attachment: true
+
+  - from: COMPLEMENT_INFO
+    to: END_ABANDONNE
+    action: EXPIRER
+    label: Delai expire sans complement
+
+  - from: VALIDATION_DOCUMENTS
+    to: DECISION_VALIDATION
+    action: EXAMINER
+    label: Examen des documents termine
+
+  - from: DECISION_VALIDATION
+    to: VERIFICATION_ANTECEDENTS
+    action: VALIDER
+    label: Documents valides
+    guard:
+      field: type_compte
+      operator: eq
+      value: OPERATEUR_ECONOMIQUE
+
+  - from: DECISION_VALIDATION
+    to: APPROBATION_DGCMP
+    action: VALIDER_DIRECT
+    label: Documents valides (non OE, pas de verification antecedents)
+    guard:
+      field: type_compte
+      operator: neq
+      value: OPERATEUR_ECONOMIQUE
+
+  - from: DECISION_VALIDATION
+    to: DEMANDE_COMPLEMENT
+    action: DEMANDER_COMPLEMENT
+    label: Documents non conformes
+    requires_comment: true
+
+  - from: DECISION_VALIDATION
+    to: END_REJETE
+    action: REJETER
+    label: Rejet definitif (fraude ou falsification)
+    requires_comment: true
+    requires_signature: true
+
+  - from: VERIFICATION_ANTECEDENTS
+    to: DECISION_ANTECEDENTS
+    action: VERIFIER
+    label: Verification terminee
+
+  - from: DECISION_ANTECEDENTS
+    to: APPROBATION_DGCMP
+    action: CONFORME
+    label: Antecedents conformes
+
+  - from: DECISION_ANTECEDENTS
+    to: END_REJETE
+    action: NON_CONFORME
+    label: Antecedents non conformes (exclusion, etc.)
+    requires_comment: true
+
+  - from: APPROBATION_DGCMP
+    to: CREATION_COMPTE
+    action: APPROUVER
+    label: Inscription approuvee
+    requires_signature: true
+
+  - from: APPROBATION_DGCMP
+    to: END_REJETE
+    action: REJETER
+    label: Inscription rejetee
+    requires_comment: true
+
+  - from: CREATION_COMPTE
+    to: NOTIFICATION_ACTIVATION
+    action: CREER
+    label: Compte cree
+
+  - from: NOTIFICATION_ACTIVATION
+    to: END_ACTIVE
+    action: ACTIVER
+    label: Compte active et utilisateur notifie

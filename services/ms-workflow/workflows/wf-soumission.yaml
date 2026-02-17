@@ -1,0 +1,201 @@
+# ============================================================
+# wf-soumission — Depot des offres
+# Decret 2025-169, Art. 75-83
+# Cycle complet du depot electronique des offres par les
+# operateurs economiques
+# ============================================================
+
+nodes:
+  - code: START
+    label: Ouverture de la periode de soumission
+    type: START
+    mandatory: true
+
+  - code: RETRAIT_DOSSIER
+    label: Retrait du dossier de consultation
+    type: SYSTEM
+    mandatory: true
+    triggers:
+      notification: OPERATEUR_ECONOMIQUE
+    config:
+      description: "Telechargement du DAO par l'operateur economique (Art. 75)"
+      track_downloads: true
+
+  - code: PREPARATION_OFFRE
+    label: Preparation de l'offre
+    type: ACTION
+    assignee_role: OPERATEUR_ECONOMIQUE
+    mandatory: true
+    config:
+      description: "Elaboration de l'offre technique et financiere"
+      components:
+        - offre_technique
+        - offre_financiere
+        - garantie_soumission
+        - documents_administratifs
+
+  - code: CHIFFREMENT_DEPOT
+    label: Chiffrement et depot electronique
+    type: SYSTEM
+    mandatory: true
+    config:
+      description: "Chiffrement de l'offre et depot sur la plateforme (Art. 76-77)"
+      encryption: true
+      double_envelope: true
+
+  - code: VERIFICATION_COMPLETUDE
+    label: Verification automatique de completude
+    type: SYSTEM
+    mandatory: true
+    config:
+      checks:
+        - garantie_soumission_presente
+        - signature_electronique_valide
+        - documents_obligatoires_presents
+        - delai_respecte
+
+  - code: DECISION_COMPLETUDE
+    label: Decision de completude
+    type: DECISION
+    mandatory: true
+    config:
+      question: "L'offre est-elle complete et deposee dans les delais ?"
+
+  - code: ACCUSE_RECEPTION
+    label: Accuse de reception
+    type: SYSTEM
+    mandatory: true
+    triggers:
+      notification: OPERATEUR_ECONOMIQUE
+    config:
+      description: "Generation de l'accuse de reception horodate (Art. 78)"
+      generate_receipt: true
+
+  - code: COFFRE_FORT
+    label: Stockage en coffre-fort electronique
+    type: SYSTEM
+    mandatory: true
+    config:
+      description: "Offre scellee jusqu'a la seance d'ouverture (Art. 79)"
+      sealed: true
+      access_restricted: true
+
+  - code: MODIFICATION_OFFRE
+    label: Modification de l'offre (avant cloture)
+    type: LOOP
+    assignee_role: OPERATEUR_ECONOMIQUE
+    config:
+      description: "L'operateur peut modifier son offre tant que le delai n'est pas expire (Art. 80)"
+
+  - code: RETRAIT_OFFRE
+    label: Retrait de l'offre
+    type: ACTION
+    assignee_role: OPERATEUR_ECONOMIQUE
+    config:
+      description: "Retrait volontaire de l'offre avant la date de cloture (Art. 81)"
+
+  - code: CLOTURE
+    label: Cloture automatique des depots
+    type: SYSTEM
+    mandatory: true
+    triggers:
+      notification: ALL
+      cascade_workflow: wf-ouverture
+    config:
+      description: "Cloture automatique a la date et heure limite (Art. 82)"
+      auto_close: true
+
+  - code: END
+    label: Soumission traitee
+    type: END
+    mandatory: true
+
+  - code: END_REJETEE
+    label: Offre rejetee (incomplete ou hors delai)
+    type: END
+
+  - code: END_RETIREE
+    label: Offre retiree par le soumissionnaire
+    type: END
+
+transitions:
+  - from: START
+    to: RETRAIT_DOSSIER
+    action: OUVRIR
+    label: Ouvrir la periode de soumission
+
+  - from: RETRAIT_DOSSIER
+    to: PREPARATION_OFFRE
+    action: RETIRER
+    label: Retirer le dossier de consultation
+
+  - from: PREPARATION_OFFRE
+    to: CHIFFREMENT_DEPOT
+    action: DEPOSER
+    label: Deposer l'offre
+    requires_attachment: true
+
+  - from: CHIFFREMENT_DEPOT
+    to: VERIFICATION_COMPLETUDE
+    action: CHIFFRER
+    label: Chiffrer et verifier
+
+  - from: VERIFICATION_COMPLETUDE
+    to: DECISION_COMPLETUDE
+    action: VERIFIER
+    label: Resultat de la verification
+
+  - from: DECISION_COMPLETUDE
+    to: ACCUSE_RECEPTION
+    action: ACCEPTER
+    label: Offre complete et dans les delais
+
+  - from: DECISION_COMPLETUDE
+    to: END_REJETEE
+    action: REJETER
+    label: Offre incomplete ou hors delai
+
+  - from: ACCUSE_RECEPTION
+    to: COFFRE_FORT
+    action: CONFIRMER
+    label: Confirmer le depot et sceller
+
+  - from: COFFRE_FORT
+    to: MODIFICATION_OFFRE
+    action: MODIFIER
+    label: Demander une modification
+    guard:
+      field: delai_expire
+      operator: eq
+      value: false
+
+  - from: COFFRE_FORT
+    to: RETRAIT_OFFRE
+    action: RETIRER
+    label: Retirer l'offre
+    guard:
+      field: delai_expire
+      operator: eq
+      value: false
+
+  - from: MODIFICATION_OFFRE
+    to: CHIFFREMENT_DEPOT
+    action: RESOUMETTRE
+    label: Resoumettre l'offre modifiee
+    requires_attachment: true
+
+  - from: RETRAIT_OFFRE
+    to: END_RETIREE
+    action: CONFIRMER_RETRAIT
+    label: Confirmer le retrait definitif
+    requires_comment: true
+
+  - from: COFFRE_FORT
+    to: CLOTURE
+    action: CLOTURER
+    label: Cloture automatique a la date limite
+
+  - from: CLOTURE
+    to: END
+    action: TERMINER
+    label: Depot cloture

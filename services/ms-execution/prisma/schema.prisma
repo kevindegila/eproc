@@ -1,0 +1,99 @@
+generator client {
+  provider        = "prisma-client-js"
+  output          = "../generated/prisma"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["execution"]
+}
+
+model Execution {
+  id              String   @id @default(uuid())
+  contractId      String   @map("contract_id")
+  contractReference String @map("contract_reference")
+  status          String   @default("NON_DEMARRE")
+  progressPercent Float    @default(0) @map("progress_percent")
+  startDate       DateTime? @map("start_date")
+  expectedEndDate DateTime? @map("expected_end_date")
+  actualEndDate   DateTime? @map("actual_end_date")
+  observations    String?
+  reports         TechnicalReport[]
+  attachments     Attachment[]
+  receptions      Reception[]
+  amendments      Amendment[]
+  createdBy       String   @map("created_by")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("executions")
+  @@schema("execution")
+}
+
+model TechnicalReport {
+  id            String    @id @default(uuid())
+  executionId   String    @map("execution_id")
+  execution     Execution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  title         String
+  reportDate    DateTime  @map("report_date")
+  content       String
+  progressPercent Float?  @map("progress_percent")
+  createdBy     String    @map("created_by")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@map("technical_reports")
+  @@schema("execution")
+}
+
+model Attachment {
+  id            String    @id @default(uuid())
+  executionId   String    @map("execution_id")
+  execution     Execution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  name          String
+  filePath      String    @map("file_path")
+  fileSize      Int       @map("file_size")
+  mimeType      String    @map("mime_type")
+  category      String    @default("DECOMPTE")
+  uploadedBy    String    @map("uploaded_by")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@map("attachments")
+  @@schema("execution")
+}
+
+model Reception {
+  id            String    @id @default(uuid())
+  executionId   String    @map("execution_id")
+  execution     Execution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  type          String    @default("PROVISOIRE")
+  receptionDate DateTime  @map("reception_date")
+  pvReference   String?   @map("pv_reference")
+  observations  String?
+  members       String[]
+  createdBy     String    @map("created_by")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@map("receptions")
+  @@schema("execution")
+}
+
+model Amendment {
+  id            String    @id @default(uuid())
+  executionId   String    @map("execution_id")
+  execution     Execution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  reference     String    @unique
+  type          String
+  description   String
+  amountChange  Float?    @map("amount_change")
+  durationChange Int?     @map("duration_change")
+  status        String    @default("BROUILLON")
+  approvedAt    DateTime? @map("approved_at")
+  createdBy     String    @map("created_by")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@map("amendments")
+  @@schema("execution")
+}

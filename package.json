@@ -1,0 +1,23 @@
+{
+  "name": "eproc-benin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Systeme d'Information et de Gestion Electronique de la Commande Publique du Benin",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "clean": "turbo clean",
+    "docker:up": "docker compose -f infrastructure/docker/docker-compose.dev.yml up -d",
+    "docker:down": "docker compose -f infrastructure/docker/docker-compose.dev.yml down",
+    "dev:services": "turbo dev --filter='./services/*'",
+    "db:generate": "turbo db:generate --filter='./services/*'",
+    "db:push": "turbo db:push --filter='./services/*'",
+    "db:seed": "turbo db:seed --filter='./services/*'"
+  },
+  "devDependencies": {
+    "turbo": "^2.4.0"
+  },
+  "packageManager": "pnpm@10.18.2"
+}
